@@ -2,21 +2,17 @@ package com.college.grievanceportal.model.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Builder;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-import java.util.ArrayList;
+import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * Represents an administrative department (e.g., Water Supply, Electricity) 
- * that handles specific types of grievances and employs GROs.
- */
 @Entity
 @Table(name = "departments")
-@Getter
-@Setter
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class Department {
@@ -28,12 +24,20 @@ public class Department {
     @Column(nullable = false, unique = true)
     private String name;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(nullable = false, unique = true)
+    private String code;
+
     private String description;
 
-    @OneToMany(mappedBy = "department")
-    private List<User> groList = new ArrayList<>();
+    // This matches the error message. It now correctly points to the 'department' field in User.java
+    @OneToMany(mappedBy = "department", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<User> groList;
 
-    @OneToMany(mappedBy = "department")
-    private List<Grievance> grievances = new ArrayList<>();
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+    }
 }

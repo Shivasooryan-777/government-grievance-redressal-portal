@@ -2,23 +2,22 @@ server:
   port: 8080
 
 spring:
-  datasource:
-    # Reads from environment variables. Falls back to local defaults if not set.
+    datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/grievance_db}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:password}
+    # The part after the colon is the fallback. It is safe to commit.
+    password: ${DB_PASSWORD:postgres} 
     driver-class-name: org.postgresql.Driver
   
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: update  # Automatically creates/updates tables based on your Entities
     show-sql: false
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
 
 app:
   jwt:
-    secret: ${JWT_SECRET:change-this-to-a-very-long-and-secure-random-string-in-production}
-    expiration-ms: ${JWT_EXPIRATION_MS:86400000} # 24 hours
+    secret: ${JWT_SECRET:VGhpc0lzQVZlcnlMb25nU2VjcmV0S2V5Rm9ySldUU2lnbmluZ1B1cnBvc2VzMTIzNDU2Nzg5MA==}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
