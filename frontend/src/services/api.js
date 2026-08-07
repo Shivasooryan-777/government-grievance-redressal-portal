@@ -1,15 +1,26 @@
 import axios from 'axios';
 
-/**
- * Configured Axios instance for making API calls to the Spring Boot backend.
- * Reads the base URL from Vite environment variables.
- */
 const api = axios.create({
-  // Vite uses import.meta.env instead of process.env
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+    baseURL: 'http://localhost:8080',
+    headers: { 'Content-Type': 'application/json' },
 });
+
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('jwtToken');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+});
+
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response && error.response.status === 401) {
+            localStorage.removeItem('jwtToken');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+        }
+        return Promise.reject(error);
+    }
+);
 
 export default api;
