@@ -13,4 +13,5 @@ import java.util.List;
 public interface GrievanceRepository extends JpaRepository<Grievance, Long> {
     List<Grievance> findByCitizenId(Long citizenId);
     List<Grievance> findByDepartmentId(Long departmentId);
+    
 }

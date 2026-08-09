@@ -28,28 +28,40 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         
+        System.out.println(">>> JWT FILTER START for URI: " + request.getRequestURI());
+        
         final String authHeader = request.getHeader("Authorization");
-        final String jwt;
-        final String userEmail;
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            System.out.println(">>> FAIL: No Bearer token in header");
             filterChain.doFilter(request, response);
             return;
         }
 
-        jwt = authHeader.substring(7);
+        final String jwt = authHeader.substring(7);
         
+        // CHECK 1: Basic validation (signature, expiration)
         if (!jwtProvider.validateToken(jwt)) {
+            System.out.println(">>> FAIL: validateToken(jwt) returned false (Likely EXPIRED or invalid signature)");
             filterChain.doFilter(request, response);
             return;
         }
 
-        userEmail = jwtProvider.extractEmail(jwt);
+        final String userEmail = jwtProvider.extractEmail(jwt);
+        System.out.println(">>> Token valid. Extracted email: " + userEmail);
 
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             User user = userRepository.findByEmail(userEmail).orElse(null);
 
-            if (user != null && jwtProvider.validateToken(jwt, user)) {
+            if (user == null) {
+                System.out.println(">>> FAIL: User not found in DB for email: " + userEmail);
+            } 
+            // CHECK 2: User-specific validation (e.g. issued-at vs password-reset)
+            else if (!jwtProvider.validateToken(jwt, user)) {
+                System.out.println(">>> FAIL: validateToken(jwt, user) returned false");
+            } 
+            else {
+                System.out.println(">>> SUCCESS: Setting Auth for " + userEmail + " with role " + user.getRole());
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         user,
                         null,
@@ -60,5 +72,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
         }
         filterChain.doFilter(request, response);
+        System.out.println(">>> JWT FILTER END");
     }
 }
