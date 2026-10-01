@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext.jsx';
+import { useAuth } from './context/useAuth';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import CitizenDashboard from './pages/CitizenDashboard';
@@ -48,7 +49,9 @@ function AppRoutes() {
     return (
         <Routes>
             {/* Public Routes */}
-            <Route path="/login" element={<Login />} />
+            <Route path="/login" element={<Navigate to="/citizen-login" replace />} />
+            <Route path="/citizen-login" element={<Login expectedRole="CITIZEN" />} />
+            <Route path="/gro-login" element={<Login expectedRole="GRO" />} />
             <Route path="/register" element={<Register />} />
             
             {/* Smart Redirect for root path based on role */}

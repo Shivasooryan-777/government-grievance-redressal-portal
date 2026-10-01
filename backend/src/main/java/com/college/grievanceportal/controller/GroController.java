@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,18 +27,21 @@ public class GroController {
     private final GrievanceService grievanceService;
 
     @GetMapping("/queue")
+    @PreAuthorize("hasRole('GRO')")
     public ResponseEntity<ApiResponse<List<GrievanceResponseDto>>> getQueue(Authentication authentication) {
         List<GrievanceResponseDto> queue = grievanceService.getQueueForGro(extractIdentifier(authentication));
         return ResponseEntity.ok(ApiResponse.success("Queue retrieved successfully", queue));
     }
 
     @PatchMapping("/grievances/{id}/status")
+    @PreAuthorize("hasRole('GRO')")
     public ResponseEntity<ApiResponse<GrievanceResponseDto>> updateStatus(
             @PathVariable Long id,
             @Valid @RequestBody StatusUpdateDto dto,
             Authentication authentication) {
 
-        GrievanceResponseDto updated = grievanceService.updateStatus(id, dto.getStatus(), extractIdentifier(authentication));
+        GrievanceResponseDto updated = grievanceService.updateStatus(
+            id, dto.getStatus(), dto.getRemarks(), dto.getActionTaken(), extractIdentifier(authentication));
         return ResponseEntity.ok(ApiResponse.success("Status updated successfully", updated));
     }
 

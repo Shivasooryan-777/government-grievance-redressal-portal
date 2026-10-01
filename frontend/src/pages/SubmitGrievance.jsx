@@ -27,7 +27,7 @@ export default function SubmitGrievance() {
             {statusMsg.text && <p className={`mb-4 p-2 rounded ${statusMsg.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{statusMsg.text}</p>}
             <form onSubmit={handleSubmit}>
                 <input type="text" placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full p-2 border rounded mb-4" required />
-                <textarea placeholder="Describe your grievance (min 20 chars)" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 border rounded mb-6 h-32" required />
+                <textarea placeholder="Describe your grievance (min 20 chars)" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 border rounded mb-6 h-32" minLength={20} required />
                 <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">Submit</button>
             </form>
         </div>

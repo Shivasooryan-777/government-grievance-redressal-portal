@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 export default function GroDashboard() {
     const { user, logout } = useAuth();
@@ -11,6 +11,24 @@ export default function GroDashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [updatingId, setUpdatingId] = useState(null);
+    const draftKey = `gro-drafts-${user?.email || 'unknown'}`;
+    const getStoredDrafts = () => {
+        const storedDrafts = localStorage.getItem(draftKey);
+        if (!storedDrafts) return { remarks: {}, actions: {} };
+        try {
+            const drafts = JSON.parse(storedDrafts);
+            return { remarks: drafts.remarks || {}, actions: drafts.actions || {} };
+        } catch {
+            localStorage.removeItem(draftKey);
+            return { remarks: {}, actions: {} };
+        }
+    };
+    const [remarks, setRemarks] = useState(() => getStoredDrafts().remarks);
+    const [actions, setActions] = useState(() => getStoredDrafts().actions);
+
+    const saveDrafts = () => {
+        localStorage.setItem(draftKey, JSON.stringify({ remarks, actions }));
+    };
 
     const fetchQueue = async () => {
         try {
@@ -18,7 +36,7 @@ export default function GroDashboard() {
             const list = res.data?.data ?? res.data ?? [];
             setQueue(list);
             setError('');
-        } catch (err) {
+        } catch {
             setError('Failed to load the department queue.');
         } finally {
             setLoading(false);
@@ -26,15 +44,19 @@ export default function GroDashboard() {
     };
 
     useEffect(() => {
-        fetchQueue();
+        queueMicrotask(() => { void fetchQueue(); });
     }, []);
 
     const handleStatusUpdate = async (id, newStatus) => {
         setUpdatingId(id);
         try {
-            await api.patch(`/api/gro/grievances/${id}/status`, { status: newStatus });
+            await api.patch(`/api/gro/grievances/${id}/status`, {
+                status: newStatus,
+                remarks: remarks[id] || '',
+                actionTaken: actions[id] || '',
+            });
             await fetchQueue();
-        } catch (err) {
+        } catch {
             alert('Failed to update status. Ensure this grievance belongs to your department.');
         } finally {
             setUpdatingId(null);
@@ -89,6 +111,23 @@ export default function GroDashboard() {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{g.priority}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{g.status}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <input
+                                            className="border rounded p-1 mb-1 w-full"
+                                            placeholder="Resolution remarks"
+                                            maxLength={2000}
+                                            value={remarks[g.id] || ''}
+                                            onChange={(e) => setRemarks((items) => ({ ...items, [g.id]: e.target.value }))}
+                                        />
+                                        <input
+                                            className="border rounded p-1 mb-1 w-full"
+                                            placeholder="Action taken (optional)"
+                                            maxLength={255}
+                                            value={actions[g.id] || ''}
+                                            onChange={(e) => setActions((items) => ({ ...items, [g.id]: e.target.value }))}
+                                        />
+                                        <button type="button" className="bg-gray-600 text-white px-2 py-1 rounded mb-1" onClick={saveDrafts}>
+                                            Save draft
+                                        </button>
                                         <select
                                             className="border rounded p-1"
                                             disabled={updatingId === g.id}

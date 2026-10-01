@@ -3,6 +3,7 @@ package com.college.grievanceportal.controller;
 import com.college.grievanceportal.dto.ApiResponse;
 import com.college.grievanceportal.dto.GrievanceRequestDto;
 import com.college.grievanceportal.dto.GrievanceResponseDto;
+import com.college.grievanceportal.dto.FeedbackRequestDto;
 import com.college.grievanceportal.model.entity.User;
 import com.college.grievanceportal.repository.UserRepository;
 import com.college.grievanceportal.service.GrievanceService;
@@ -11,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,6 +30,7 @@ public class GrievanceController {
     private final UserRepository userRepository;
 
     @PostMapping
+    @PreAuthorize("hasRole('CITIZEN')")
     public ResponseEntity<ApiResponse<GrievanceResponseDto>> submitGrievance(
             @Valid @RequestBody GrievanceRequestDto requestDto,
             Authentication authentication) {
@@ -44,6 +47,7 @@ public class GrievanceController {
     }
 
     @GetMapping("/mine")
+    @PreAuthorize("hasRole('CITIZEN')")
     public ResponseEntity<ApiResponse<List<GrievanceResponseDto>>> getMyGrievances(Authentication authentication) {
 
         User currentUser = getAuthenticatedUser(authentication);
@@ -54,6 +58,18 @@ public class GrievanceController {
                 .message("Grievances fetched successfully")
                 .data(grievances)
                 .build());
+    }
+
+    @PostMapping("/{id}/feedback")
+    @PreAuthorize("hasRole('CITIZEN')")
+    public ResponseEntity<ApiResponse<GrievanceResponseDto>> submitFeedback(
+            @org.springframework.web.bind.annotation.PathVariable Long id,
+            @Valid @RequestBody FeedbackRequestDto requestDto,
+            Authentication authentication) {
+        User currentUser = getAuthenticatedUser(authentication);
+        GrievanceResponseDto response = grievanceService.submitFeedback(
+                id, requestDto, currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.success("Feedback submitted successfully", response));
     }
 
     /**

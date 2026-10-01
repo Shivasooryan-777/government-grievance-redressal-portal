@@ -6,7 +6,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -18,50 +17,51 @@ import java.io.IOException;
 import java.util.Collections;
 
 @Component
-@RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtProvider jwtProvider;
     private final UserRepository userRepository;
 
+    public JwtAuthFilter(JwtProvider jwtProvider, UserRepository userRepository) {
+        this.jwtProvider = jwtProvider;
+        this.userRepository = userRepository;
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         
-        System.out.println(">>> JWT FILTER START for URI: " + request.getRequestURI());
-        
         final String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            System.out.println(">>> FAIL: No Bearer token in header");
             filterChain.doFilter(request, response);
             return;
         }
 
-        final String jwt = authHeader.substring(7);
+        final String jwt = authHeader.substring(7).trim();
+        if (jwt.isEmpty()) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         
         // CHECK 1: Basic validation (signature, expiration)
         if (!jwtProvider.validateToken(jwt)) {
-            System.out.println(">>> FAIL: validateToken(jwt) returned false (Likely EXPIRED or invalid signature)");
             filterChain.doFilter(request, response);
             return;
         }
 
-        final String userEmail = jwtProvider.extractEmail(jwt);
-        System.out.println(">>> Token valid. Extracted email: " + userEmail);
+        final String userEmail;
+        try {
+            userEmail = jwtProvider.extractEmail(jwt);
+        } catch (RuntimeException ex) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             User user = userRepository.findByEmail(userEmail).orElse(null);
 
-            if (user == null) {
-                System.out.println(">>> FAIL: User not found in DB for email: " + userEmail);
-            } 
-            // CHECK 2: User-specific validation (e.g. issued-at vs password-reset)
-            else if (!jwtProvider.validateToken(jwt, user)) {
-                System.out.println(">>> FAIL: validateToken(jwt, user) returned false");
-            } 
-            else {
-                System.out.println(">>> SUCCESS: Setting Auth for " + userEmail + " with role " + user.getRole());
+            if (user != null && jwtProvider.validateToken(jwt, user)) {
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         user,
                         null,
@@ -72,6 +72,5 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
         }
         filterChain.doFilter(request, response);
-        System.out.println(">>> JWT FILTER END");
     }
 }
