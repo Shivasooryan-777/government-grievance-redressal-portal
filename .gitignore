@@ -26,3 +26,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local-only agent context — never commit (contains internal rubric/strategy notes)
+MASTER_AGENT_CONTEXT.md
+SESSION_PLAN_DAY2_TO_11.md
