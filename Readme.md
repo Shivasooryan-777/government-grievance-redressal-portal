@@ -11,7 +11,7 @@ Citizens currently have no single trackable channel to report civic issues like 
 | Frontend | React.js + Tailwind CSS + Axios |
 | Backend | Spring Boot 3.x (Java 17), Spring Security + JWT |
 | ORM / Data Layer | Spring Data JPA + Hibernate |
-| Database | PostgreSQL 15 (or MySQL 8) |
+| Database | PostgreSQL 15 |
 | Build Tool | Maven |
 | Testing | JUnit 5 |
 | API Docs | springdoc-openapi (Swagger UI) |
@@ -35,7 +35,7 @@ Citizens currently have no single trackable channel to report civic issues like 
 - Java 17 (JDK)
 - Maven 3.9+
 - Node.js 18+ and npm
-- PostgreSQL 15 (or MySQL 8) running locally
+- PostgreSQL 15 running locally
 
 ### Backend
 ```bash
@@ -49,18 +49,25 @@ Backend runs at `http://localhost:8080`. Swagger UI at `http://localhost:8080/sw
 ### Frontend
 ```bash
 cd frontend
+cp .env.example .env      # configure VITE_API_BASE_URL if backend is not on port 8080
 npm install
 npm run dev
 ```
 Frontend runs at `http://localhost:5173` (or as configured).
 
-### Environment Variables (see `.env.example`)
+### Backend Environment Variables (see `backend/.env.example`)
 ```
 DB_URL=jdbc:postgresql://localhost:5432/grievance_db
-DB_USERNAME=
+DB_USERNAME=postgres
 DB_PASSWORD=
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 JWT_SECRET=
 JWT_EXPIRATION_MS=86400000
+```
+
+### Frontend Environment Variables (see `frontend/.env.example`)
+```
+VITE_API_BASE_URL=http://localhost:8080
 ```
 
 ## 6. API Documentation
