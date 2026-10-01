@@ -5,7 +5,6 @@ import com.college.grievanceportal.dto.AuthResponseDto;
 import com.college.grievanceportal.dto.LoginRequestDto;
 import com.college.grievanceportal.dto.RegisterRequestDto;
 import com.college.grievanceportal.model.entity.User;
-import com.college.grievanceportal.model.enums.Role;
 import com.college.grievanceportal.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -25,21 +24,12 @@ public class AuthService {
             throw new IllegalArgumentException("Email is already registered");
         }
 
-        Role userRole = Role.CITIZEN;
-        if (request.getRole() != null && !request.getRole().isBlank()) {
-            try {
-                userRole = Role.valueOf(request.getRole().toUpperCase());
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid role provided");
-            }
-        }
-
         User user = User.builder()
                 .name(request.getName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .phoneNumber(request.getPhoneNumber())
-                .role(userRole)
+                .role(com.college.grievanceportal.model.enums.Role.CITIZEN)
                 .build();
 
         User savedUser = userRepository.save(user);

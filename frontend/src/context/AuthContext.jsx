@@ -1,20 +1,20 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import { useState } from 'react';
 import api from '../services/api';
-
-const AuthContext = createContext(null);
+import { AuthContext } from './AuthContext.js';
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [token, setToken] = useState(localStorage.getItem('jwtToken'));
-
-    useEffect(() => {
-        if (token) {
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) setUser(JSON.parse(storedUser));
-        } else {
-            setUser(null);
+    const [user, setUser] = useState(() => {
+        const storedUser = localStorage.getItem('user');
+        if (!storedUser) return null;
+        try {
+            return JSON.parse(storedUser);
+        } catch {
+            localStorage.removeItem('user');
+            localStorage.removeItem('jwtToken');
+            return null;
         }
-    }, [token]);
+    });
+    const [token, setToken] = useState(localStorage.getItem('jwtToken'));
 
     const login = async (email, password) => {
         const res = await api.post('/api/auth/login', { email, password });
@@ -24,7 +24,7 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem('user', JSON.stringify({ userId, email: uEmail, role }));
             setToken(jwt);
             setUser({ userId, email: uEmail, role });
-            return true;
+            return role;
         }
         return false;
     };
@@ -42,5 +42,3 @@ export const AuthProvider = ({ children }) => {
         </AuthContext.Provider>
     );
 };
-
-export const useAuth = () => useContext(AuthContext);

@@ -24,6 +24,9 @@ public class JwtProvider {
     private long expiration;
 
     public String generateToken(User user) {
+        if (user == null || user.getId() == null || user.getEmail() == null || user.getRole() == null) {
+            throw new IllegalArgumentException("Cannot generate a token for an incomplete user");
+        }
         Map<String, Object> claims = new HashMap<>();
         claims.put("role", user.getRole().name());
         claims.put("userId", user.getId());
@@ -55,8 +58,15 @@ public class JwtProvider {
     }
 
     public boolean validateToken(String token, User user) {
-        final String email = extractEmail(token);
-        return (email.equals(user.getEmail()) && !isTokenExpired(token));
+        if (token == null || user == null || user.getEmail() == null) {
+            return false;
+        }
+        try {
+            final String email = extractEmail(token);
+            return user.getEmail().equals(email) && !isTokenExpired(token);
+        } catch (RuntimeException ex) {
+            return false;
+        }
     }
     
     public boolean validateToken(String token) {
@@ -77,7 +87,14 @@ public class JwtProvider {
     }
 
     private SecretKey getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secret);
-        return Keys.hmacShaKeyFor(keyBytes);
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("JWT secret must be configured");
+        }
+        try {
+            byte[] keyBytes = Decoders.BASE64.decode(secret);
+            return Keys.hmacShaKeyFor(keyBytes);
+        } catch (RuntimeException ex) {
+            throw new IllegalStateException("JWT secret must be valid Base64 and at least 256 bits", ex);
+        }
     }
 }

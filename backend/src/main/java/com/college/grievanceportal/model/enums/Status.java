@@ -6,5 +6,6 @@ package com.college.grievanceportal.model.enums;
 public enum Status {
     PENDING,
     IN_PROGRESS,
-    RESOLVED
+    RESOLVED,
+    REJECTED
 }

@@ -1,25 +1,34 @@
 package com.college.grievanceportal.service;
 
-import com.college.grievanceportal.dto.GrievanceRequestDto;
-import com.college.grievanceportal.dto.GrievanceResponseDto;
-import com.college.grievanceportal.model.entity.Department;
-import com.college.grievanceportal.model.entity.Grievance;
-import com.college.grievanceportal.model.entity.User;
-import com.college.grievanceportal.model.enums.Priority;
-import com.college.grievanceportal.model.enums.Status;
-import com.college.grievanceportal.repository.DepartmentRepository;
-import com.college.grievanceportal.repository.GrievanceRepository;
-import com.college.grievanceportal.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.college.grievanceportal.dto.FeedbackRequestDto;
+import com.college.grievanceportal.dto.FeedbackResponseDto;
+import com.college.grievanceportal.dto.GrievanceRequestDto;
+import com.college.grievanceportal.dto.GrievanceResponseDto;
+import com.college.grievanceportal.dto.ResolutionLogResponseDto;
+import com.college.grievanceportal.model.entity.Department;
+import com.college.grievanceportal.model.entity.Feedback;
+import com.college.grievanceportal.model.entity.Grievance;
+import com.college.grievanceportal.model.entity.ResolutionLog;
+import com.college.grievanceportal.model.entity.User;
+import com.college.grievanceportal.model.enums.Priority;
+import com.college.grievanceportal.model.enums.Status;
+import com.college.grievanceportal.repository.DepartmentRepository;
+import com.college.grievanceportal.repository.FeedbackRepository;
+import com.college.grievanceportal.repository.GrievanceRepository;
+import com.college.grievanceportal.repository.ResolutionLogRepository;
+import com.college.grievanceportal.repository.UserRepository;
+
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +39,8 @@ public class GrievanceService {
     private final GrievanceRepository grievanceRepository;
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
+    private final ResolutionLogRepository resolutionLogRepository;
+    private final FeedbackRepository feedbackRepository;
 
     @Transactional
     public GrievanceResponseDto createGrievance(GrievanceRequestDto dto, Long citizenId) {
@@ -49,6 +60,7 @@ public class GrievanceService {
         return mapToResponse(grievanceRepository.save(grievance));
     }
 
+    @Transactional(readOnly = true)
     public List<GrievanceResponseDto> getGrievancesForCitizen(Long citizenId) {
         return grievanceRepository.findByCitizenId(citizenId).stream()
                 .map(this::mapToResponse)
@@ -65,7 +77,15 @@ public class GrievanceService {
         if (gro.getDepartment() == null) {
             throw new IllegalArgumentException("GRO has no department assigned");
         }
-        return getQueueForDepartment(gro.getDepartment().getId());
+        Department unassigned = departmentRepository.findByName(PLACEHOLDER_DEPARTMENT).orElse(null);
+        List<Long> departmentIds = unassigned == null
+            ? List.of(gro.getDepartment().getId())
+            : List.of(gro.getDepartment().getId(), unassigned.getId());
+        return grievanceRepository.findByDepartmentIdInAndStatusIn(
+                departmentIds, List.of(Status.PENDING, Status.IN_PROGRESS)).stream()
+            .sorted(Comparator.comparing(Grievance::getPriority).reversed())
+            .map(this::mapToResponse)
+            .toList();
     }
 
     /**
@@ -76,7 +96,8 @@ public class GrievanceService {
      */
     @Transactional(readOnly = true)
     public List<GrievanceResponseDto> getQueueForDepartment(Long departmentId) {
-        return grievanceRepository.findByDepartmentId(departmentId).stream()
+        return grievanceRepository.findByDepartmentIdAndStatusIn(
+                departmentId, List.of(Status.PENDING, Status.IN_PROGRESS)).stream()
                 .sorted(Comparator.comparing(Grievance::getPriority).reversed())
                 .map(this::mapToResponse)
                 .toList();
@@ -89,30 +110,68 @@ public class GrievanceService {
      * from the client.
      */
     @Transactional
-    public GrievanceResponseDto updateStatus(Long grievanceId, String newStatus, String groIdentifier) {
+    public GrievanceResponseDto updateStatus(
+            Long grievanceId, String newStatus, String remarks, String actionTaken, String groIdentifier) {
         Grievance grievance = grievanceRepository.findById(grievanceId)
                 .orElseThrow(() -> new IllegalArgumentException("Grievance not found with id: " + grievanceId));
 
         User gro = findGro(groIdentifier);
 
         // SECURITY: Verify the GRO's department matches the grievance's department
-        if (grievance.getDepartment() == null
-                || gro.getDepartment() == null
-                || !grievance.getDepartment().getId().equals(gro.getDepartment().getId())) {
+        if (grievance.getDepartment() == null || gro.getDepartment() == null) {
             throw new AccessDeniedException("GRO does not belong to the grievance's department");
+        }
+        Department unassigned = departmentRepository.findByName(PLACEHOLDER_DEPARTMENT).orElse(null);
+        boolean isUnassigned = unassigned != null && grievance.getDepartment().getId().equals(unassigned.getId());
+        if (!isUnassigned && !grievance.getDepartment().getId().equals(gro.getDepartment().getId())) {
+            throw new AccessDeniedException("GRO does not belong to the grievance's department");
+        }
+        if (isUnassigned) {
+            grievance.setDepartment(gro.getDepartment());
         }
 
         // Safely map the incoming string to the Status enum
         Status statusEnum;
         try {
-            statusEnum = Status.valueOf(newStatus);
-        } catch (IllegalArgumentException e) {
+            statusEnum = Status.valueOf(newStatus.trim().toUpperCase());
+        } catch (RuntimeException e) {
             throw new IllegalArgumentException("Invalid status value: " + newStatus);
         }
 
         grievance.setStatus(statusEnum);
 
+        ResolutionLog log = new ResolutionLog();
+        log.setGrievance(grievance);
+        log.setGro(gro);
+        log.setRemarks(remarks == null || remarks.isBlank() ? "Status changed to " + statusEnum : remarks.trim());
+        log.setActionTaken(actionTaken == null || actionTaken.isBlank() ? statusEnum.name() : actionTaken.trim());
+        resolutionLogRepository.save(log);
+
         return mapToResponse(grievanceRepository.save(grievance));
+    }
+
+    @Transactional
+    public GrievanceResponseDto submitFeedback(Long grievanceId, FeedbackRequestDto dto, Long citizenId) {
+        Grievance grievance = grievanceRepository.findById(grievanceId)
+                .orElseThrow(() -> new IllegalArgumentException("Grievance not found with id: " + grievanceId));
+
+        if (!grievance.getCitizen().getId().equals(citizenId)) {
+            throw new AccessDeniedException("You can only review your own grievances");
+        }
+        if (grievance.getStatus() != Status.RESOLVED) {
+            throw new IllegalArgumentException("Feedback can only be submitted for resolved grievances");
+        }
+        if (feedbackRepository.findByGrievanceId(grievanceId).isPresent()) {
+            throw new IllegalArgumentException("Feedback has already been submitted for this grievance");
+        }
+
+        Feedback feedback = new Feedback();
+        feedback.setGrievance(grievance);
+        feedback.setRating(dto.getRating());
+        feedback.setComment(dto.getComment());
+        feedback.setIsAppealed(false);
+        feedbackRepository.save(feedback);
+        return mapToResponse(grievance);
     }
 
     /**
@@ -126,7 +185,7 @@ public class GrievanceService {
             user = byEmail.get();
         } else {
             try {
-                user = userRepository.findById(Long.parseLong(identifier))
+                user = userRepository.findById(Long.valueOf(identifier))
                         .orElseThrow(() -> new IllegalArgumentException("GRO user not found"));
             } catch (NumberFormatException e) {
                 throw new IllegalArgumentException("GRO user not found");
@@ -168,6 +227,24 @@ public class GrievanceService {
                 .status(g.getStatus())
                 .priority(g.getPriority())
                 .createdAt(g.getCreatedAt())
+                .resolutionLogs(resolutionLogRepository.findByGrievanceId(g.getId()).stream()
+                    .map(log -> ResolutionLogResponseDto.builder()
+                        .id(log.getId())
+                        .remarks(log.getRemarks())
+                        .actionTaken(log.getActionTaken())
+                        .groEmail(log.getGro().getEmail())
+                        .loggedAt(log.getLoggedAt())
+                        .build())
+                    .toList())
+                .feedback(feedbackRepository.findByGrievanceId(g.getId())
+                    .map(feedback -> FeedbackResponseDto.builder()
+                        .id(feedback.getId())
+                        .rating(feedback.getRating())
+                        .comment(feedback.getComment())
+                        .appealed(feedback.getIsAppealed())
+                        .submittedAt(feedback.getSubmittedAt())
+                        .build())
+                    .orElse(null))
                 .build();
     }
 }

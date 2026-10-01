@@ -13,4 +13,9 @@ public class GrievanceRequestDto {
     @NotBlank(message = "Description is required")
     @Size(min = 20, message = "Description must be at least 20 characters long")
     private String description;
+
+    public String getSubject() { return subject; }
+    public void setSubject(String subject) { this.subject = subject; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
 }
