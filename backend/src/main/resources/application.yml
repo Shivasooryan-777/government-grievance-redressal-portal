@@ -25,3 +25,5 @@ app:
   jwt:
     secret: ${JWT_SECRET:VGhpc0lzQVZlcnlMb25nU2VjcmV0S2V5Rm9ySldUU2lnbmluZ1B1cnBvc2VzMTIzNDU2Nzg5MA==}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  seeder:
+    gro-default-password: ${GRO_DEFAULT_PASSWORD:GroPassword123!}

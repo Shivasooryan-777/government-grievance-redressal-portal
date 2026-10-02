@@ -20,6 +20,7 @@ public class RegisterRequestDto {
     private String password;
 
     @NotBlank(message = "Phone number is required")
+    @Size(min = 10, max = 15, message = "Phone number must be between 10 and 15 digits")
     private String phoneNumber;
 
     public String getName() { return name; }

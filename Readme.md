@@ -63,7 +63,18 @@ DB_PASSWORD=
 CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 JWT_SECRET=
 JWT_EXPIRATION_MS=86400000
+GRO_DEFAULT_PASSWORD=GroPassword123!
 ```
+
+| Variable | Description | Required | Default |
+|---|---|---|---|
+| `DB_URL` | JDBC URL for PostgreSQL database | Yes | `jdbc:postgresql://localhost:5432/grievance_db` |
+| `DB_USERNAME` | Database username | Yes | `postgres` |
+| `DB_PASSWORD` | Database password | Yes | - |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated list of allowed frontend origins | No | `http://localhost:5173,http://localhost:3000` |
+| `JWT_SECRET` | Base64-encoded secret key (≥256-bit) for JWT signing | Yes | Configured in application.yml |
+| `JWT_EXPIRATION_MS` | JWT validity window in milliseconds | No | `86400000` (24 hours) |
+| `GRO_DEFAULT_PASSWORD` | Default password used by `DataSeeder` for seeded GRO departmental accounts | No | `GroPassword123!` |
 
 ### Frontend Environment Variables (see `frontend/.env.example`)
 ```
