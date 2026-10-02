@@ -18,6 +18,21 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  mail:
+    host: ${MAIL_HOST:smtp-relay.brevo.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 app:
   cors:
@@ -27,3 +42,5 @@ app:
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   seeder:
     gro-default-password: ${GRO_DEFAULT_PASSWORD:GroPassword123!}
+  mail:
+    from: ${MAIL_FROM_ADDRESS:noreply@grievanceportal.gov}

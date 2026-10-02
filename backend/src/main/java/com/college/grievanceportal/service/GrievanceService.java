@@ -32,6 +32,10 @@ import com.college.grievanceportal.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
+/**
+ * Service managing core grievance workflows including submission, department queuing,
+ * status transitions by GROs, feedback recording, resolution appeals, and email notifications.
+ */
 @Service
 @RequiredArgsConstructor
 public class GrievanceService {
@@ -43,6 +47,7 @@ public class GrievanceService {
     private final DepartmentRepository departmentRepository;
     private final ResolutionLogRepository resolutionLogRepository;
     private final FeedbackRepository feedbackRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public GrievanceResponseDto createGrievance(GrievanceRequestDto dto, Long citizenId) {
@@ -140,6 +145,7 @@ public class GrievanceService {
             throw new IllegalArgumentException("Invalid status value: " + newStatus);
         }
 
+        Status oldStatus = grievance.getStatus();
         grievance.setStatus(statusEnum);
 
         ResolutionLog log = new ResolutionLog();
@@ -149,7 +155,27 @@ public class GrievanceService {
         log.setActionTaken(actionTaken == null || actionTaken.isBlank() ? statusEnum.name() : actionTaken.trim());
         resolutionLogRepository.save(log);
 
-        return mapToResponse(grievanceRepository.save(grievance));
+        Grievance savedGrievance = grievanceRepository.save(grievance);
+
+        // Notify citizen asynchronously if status actually changed
+        if (oldStatus != statusEnum) {
+            User citizen = savedGrievance.getCitizen();
+            if (citizen != null) {
+                citizen.getName();
+                citizen.getEmail();
+            }
+            if (savedGrievance.getDepartment() != null) {
+                savedGrievance.getDepartment().getName();
+            }
+            notificationService.sendStatusChangeEmail(
+                    citizen,
+                    savedGrievance,
+                    oldStatus != null ? oldStatus.name() : "UNKNOWN",
+                    statusEnum.name()
+            );
+        }
+
+        return mapToResponse(savedGrievance);
     }
 
     @Transactional
@@ -285,10 +311,33 @@ public class GrievanceService {
         feedback.setAppealReason(reason.trim());
         feedbackRepository.save(feedback);
 
+        Status oldStatus = grievance.getStatus();
+
         // Reopen grievance: Status -> IN_PROGRESS, Priority -> HIGH
         grievance.setStatus(Status.IN_PROGRESS);
         grievance.setPriority(Priority.HIGH);
         Grievance updatedGrievance = grievanceRepository.save(grievance);
+
+        // Pre-initialize lazy proxies in the persistence context
+        User citizen = updatedGrievance.getCitizen();
+        if (citizen != null) {
+            citizen.getName();
+            citizen.getEmail();
+        }
+        if (updatedGrievance.getDepartment() != null) {
+            updatedGrievance.getDepartment().getName();
+        }
+
+        // Notify citizen of the status reversion to IN_PROGRESS
+        notificationService.sendStatusChangeEmail(
+                citizen,
+                updatedGrievance,
+                oldStatus != null ? oldStatus.name() : "RESOLVED",
+                Status.IN_PROGRESS.name()
+        );
+
+        // Send appeal receipt and priority escalation confirmation
+        notificationService.sendAppealConfirmationEmail(citizen, updatedGrievance);
 
         return mapToResponse(updatedGrievance);
     }
