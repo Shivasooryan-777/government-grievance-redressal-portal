@@ -14,7 +14,9 @@ import com.college.grievanceportal.dto.FeedbackRequestDto;
 import com.college.grievanceportal.dto.FeedbackResponseDto;
 import com.college.grievanceportal.dto.GrievanceRequestDto;
 import com.college.grievanceportal.dto.GrievanceResponseDto;
+import com.college.grievanceportal.dto.GrievanceTrackingResponseDto;
 import com.college.grievanceportal.dto.ResolutionLogResponseDto;
+import com.college.grievanceportal.exception.ResourceNotFoundException;
 import com.college.grievanceportal.model.entity.Department;
 import com.college.grievanceportal.model.entity.Feedback;
 import com.college.grievanceportal.model.entity.Grievance;
@@ -215,11 +217,90 @@ public class GrievanceService {
                 });
     }
 
+    /**
+     * Looks up a grievance by its unique tracking ID and converts it into a non-sensitive
+     * tracking DTO suitable for unauthenticated public status checks.
+     *
+     * @param trackingId the grievance tracking identifier (e.g. GRV-XXXXXXXX)
+     * @return non-sensitive tracking DTO with status, department, and timestamp fields
+     */
+    @Transactional(readOnly = true)
+    public GrievanceTrackingResponseDto trackGrievance(String trackingId) {
+        if (trackingId == null || trackingId.trim().isBlank()) {
+            throw new IllegalArgumentException("Tracking ID cannot be empty");
+        }
+
+        Grievance grievance = grievanceRepository.findByTrackingId(trackingId.trim())
+                .orElseThrow(() -> new ResourceNotFoundException("Grievance not found with tracking ID: " + trackingId.trim()));
+
+        return GrievanceTrackingResponseDto.builder()
+                .trackingId(grievance.getTrackingId())
+                .status(grievance.getStatus())
+                .priority(grievance.getPriority())
+                .departmentName(grievance.getDepartment() != null ? grievance.getDepartment().getName() : "Unassigned")
+                .createdAt(grievance.getCreatedAt())
+                .updatedAt(grievance.getUpdatedAt())
+                .build();
+    }
+
+    /**
+     * Submits a resolution appeal for a resolved grievance using its existing feedback record.
+     * Reopens the grievance back to IN_PROGRESS and escalates priority to HIGH so it surfaces
+     * at the top of the GRO's priority queue automatically.
+     * Enforces the one-appeal rule and validates that only the grievance's citizen owner can appeal.
+     *
+     * @param feedbackId ID of the Feedback record being appealed
+     * @param reason     reason explanation provided by the citizen
+     * @param citizenId  ID of the authenticated citizen
+     * @return updated GrievanceResponseDto reflecting the reopened status and HIGH priority
+     */
+    @Transactional
+    public GrievanceResponseDto raiseAppeal(Long feedbackId, String reason, Long citizenId) {
+        Feedback feedback = feedbackRepository.findById(feedbackId)
+                .orElseThrow(() -> new ResourceNotFoundException("Feedback not found with id: " + feedbackId));
+
+        Grievance grievance = feedback.getGrievance();
+
+        // Security check: Only the citizen who submitted the grievance can appeal
+        if (!grievance.getCitizen().getId().equals(citizenId)) {
+            throw new AccessDeniedException("You can only appeal grievances you submitted");
+        }
+
+        // Enforce "no duplicate appeal" rule
+        if (Boolean.TRUE.equals(feedback.getIsAppealed())) {
+            throw new IllegalArgumentException("This feedback has already been appealed");
+        }
+
+        // Only resolved grievances can be appealed
+        if (grievance.getStatus() != Status.RESOLVED) {
+            throw new IllegalArgumentException("Only resolved grievances can be appealed");
+        }
+
+        if (reason == null || reason.trim().isBlank()) {
+            throw new IllegalArgumentException("Appeal reason cannot be empty");
+        }
+
+        // Mark feedback as appealed with the provided reason
+        feedback.setIsAppealed(true);
+        feedback.setAppealReason(reason.trim());
+        feedbackRepository.save(feedback);
+
+        // Reopen grievance: Status -> IN_PROGRESS, Priority -> HIGH
+        grievance.setStatus(Status.IN_PROGRESS);
+        grievance.setPriority(Priority.HIGH);
+        Grievance updatedGrievance = grievanceRepository.save(grievance);
+
+        return mapToResponse(updatedGrievance);
+    }
+
     private String generateTrackingId() {
         return "GRV-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 
     private GrievanceResponseDto mapToResponse(Grievance g) {
+        Optional<Feedback> feedbackOpt = feedbackRepository.findByGrievanceId(g.getId());
+        boolean isAppealed = feedbackOpt.map(f -> Boolean.TRUE.equals(f.getIsAppealed())).orElse(false);
+
         return GrievanceResponseDto.builder()
                 .id(g.getId())
                 .trackingId(g.getTrackingId())
@@ -227,6 +308,7 @@ public class GrievanceService {
                 .description(g.getDescription())
                 .status(g.getStatus())
                 .priority(g.getPriority())
+                .isAppealed(isAppealed)
                 .createdAt(g.getCreatedAt())
                 .resolutionLogs(resolutionLogRepository.findByGrievanceId(g.getId()).stream()
                     .map(log -> ResolutionLogResponseDto.builder()
@@ -237,12 +319,13 @@ public class GrievanceService {
                         .loggedAt(log.getLoggedAt())
                         .build())
                     .toList())
-                .feedback(feedbackRepository.findByGrievanceId(g.getId())
+                .feedback(feedbackOpt
                     .map(feedback -> FeedbackResponseDto.builder()
                         .id(feedback.getId())
                         .rating(feedback.getRating())
                         .comment(feedback.getComment())
                         .appealed(feedback.getIsAppealed())
+                        .appealReason(feedback.getAppealReason())
                         .submittedAt(feedback.getSubmittedAt())
                         .build())
                     .orElse(null))

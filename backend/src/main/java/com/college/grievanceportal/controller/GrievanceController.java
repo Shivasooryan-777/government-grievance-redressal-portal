@@ -1,9 +1,10 @@
 package com.college.grievanceportal.controller;
 
 import com.college.grievanceportal.dto.ApiResponse;
+import com.college.grievanceportal.dto.FeedbackRequestDto;
 import com.college.grievanceportal.dto.GrievanceRequestDto;
 import com.college.grievanceportal.dto.GrievanceResponseDto;
-import com.college.grievanceportal.dto.FeedbackRequestDto;
+import com.college.grievanceportal.dto.GrievanceTrackingResponseDto;
 import com.college.grievanceportal.model.entity.User;
 import com.college.grievanceportal.repository.UserRepository;
 import com.college.grievanceportal.service.GrievanceService;
@@ -11,9 +12,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -60,10 +62,25 @@ public class GrievanceController {
                 .build());
     }
 
+    /**
+     * Unauthenticated public tracking endpoint. Allows anyone with a valid tracking ID
+     * to check the live status, assigned department, and priority of a grievance without
+     * exposing sensitive citizen data or complaint details.
+     *
+     * @param trackingId the unique grievance tracking ID
+     * @return public tracking response with non-sensitive status fields
+     */
+    @GetMapping("/track/{trackingId}")
+    public ResponseEntity<ApiResponse<GrievanceTrackingResponseDto>> trackGrievance(
+            @PathVariable String trackingId) {
+        GrievanceTrackingResponseDto response = grievanceService.trackGrievance(trackingId);
+        return ResponseEntity.ok(ApiResponse.success("Grievance status retrieved successfully", response));
+    }
+
     @PostMapping("/{id}/feedback")
     @PreAuthorize("hasRole('CITIZEN')")
     public ResponseEntity<ApiResponse<GrievanceResponseDto>> submitFeedback(
-            @org.springframework.web.bind.annotation.PathVariable Long id,
+            @PathVariable Long id,
             @Valid @RequestBody FeedbackRequestDto requestDto,
             Authentication authentication) {
         User currentUser = getAuthenticatedUser(authentication);

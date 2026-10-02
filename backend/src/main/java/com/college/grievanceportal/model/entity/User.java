@@ -6,7 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.ToString; // <--- ADDED THIS IMPORT
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 
@@ -38,9 +38,11 @@ public class User {
     @Column(nullable = false)
     private Role role;
 
-    // FIX: Added @ToString.Exclude to prevent LazyInitializationException 
-    // when Spring Security logs the authentication name after the request finishes.
-    @ToString.Exclude // <--- ADDED THIS ANNOTATION
+    /**
+     * Excluded from toString to prevent LazyInitializationException
+     * when Spring Security logs the authentication principal outside the persistence context.
+     */
+    @ToString.Exclude
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id")
     private Department department;

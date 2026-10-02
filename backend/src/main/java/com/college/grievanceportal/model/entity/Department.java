@@ -29,7 +29,6 @@ public class Department {
 
     private String description;
 
-    // This matches the error message. It now correctly points to the 'department' field in User.java
     @OneToMany(mappedBy = "department", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<User> groList;
 

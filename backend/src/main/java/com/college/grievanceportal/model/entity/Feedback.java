@@ -49,6 +49,9 @@ public class Feedback {
     @Column(name = "is_appealed", nullable = false)
     private Boolean isAppealed = false;
 
+    @Column(name = "appeal_reason", columnDefinition = "TEXT")
+    private String appealReason;
+
     @Column(name = "submitted_at", nullable = false, updatable = false)
     private LocalDateTime submittedAt;
 
@@ -62,6 +65,8 @@ public class Feedback {
     public void setComment(String comment) { this.comment = comment; }
     public Boolean getIsAppealed() { return isAppealed; }
     public void setIsAppealed(Boolean appealed) { isAppealed = appealed; }
+    public String getAppealReason() { return appealReason; }
+    public void setAppealReason(String appealReason) { this.appealReason = appealReason; }
     public LocalDateTime getSubmittedAt() { return submittedAt; }
     public void setSubmittedAt(LocalDateTime submittedAt) { this.submittedAt = submittedAt; }
 
