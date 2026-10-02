@@ -123,6 +123,17 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles resource not found exceptions (e.g. invalid tracking ID, feedback not found).
+     *
+     * @param ex the resource not found exception
+     * @return 404 Not Found wrapped in the standard API response envelope
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResourceNotFound(ResourceNotFoundException ex) {
+        return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.NOT_FOUND);
+    }
+
+    /**
      * Catch-all handler for unexpected internal exceptions.
      * Logs the stack trace via SLF4J and returns a sanitized error envelope.
      *

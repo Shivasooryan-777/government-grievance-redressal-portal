@@ -3,12 +3,13 @@ package com.college.grievanceportal.model.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
+import org.hibernate.annotations.UpdateTimestamp;
 import com.college.grievanceportal.model.enums.Priority;
 import com.college.grievanceportal.model.enums.Status;
 
 @Entity
 @Table(name = "grievances")
-@Data // <-- Make sure you have this annotation!
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -21,7 +22,6 @@ public class Grievance {
     @Column(unique = true, nullable = false)
     private String trackingId;
 
-    // 👇 ADD THIS LINE 👇
     @Column(nullable = false)
     private String subject; 
 
@@ -42,10 +42,14 @@ public class Grievance {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id")
-    private Department department; // Might be null/optional
+    private Department department;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -65,4 +69,6 @@ public class Grievance {
     public void setDepartment(Department department) { this.department = department; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }
