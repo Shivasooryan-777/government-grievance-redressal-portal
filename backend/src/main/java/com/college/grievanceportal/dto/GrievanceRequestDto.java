@@ -11,7 +11,7 @@ public class GrievanceRequestDto {
     private String subject;
 
     @NotBlank(message = "Description is required")
-    @Size(min = 20, message = "Description must be at least 20 characters long")
+    @Size(min = 20, max = 5000, message = "Description must be between 20 and 5000 characters")
     private String description;
 
     public String getSubject() { return subject; }

@@ -34,7 +34,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class GrievanceService {
 
-    private static final String PLACEHOLDER_DEPARTMENT = "Unassigned";
+    private static final String PLACEHOLDER_DEPARTMENT = "General Administration";
 
     private final GrievanceRepository grievanceRepository;
     private final UserRepository userRepository;
@@ -78,7 +78,7 @@ public class GrievanceService {
             throw new IllegalArgumentException("GRO has no department assigned");
         }
         Department unassigned = departmentRepository.findByName(PLACEHOLDER_DEPARTMENT).orElse(null);
-        List<Long> departmentIds = unassigned == null
+        List<Long> departmentIds = (unassigned == null || unassigned.getId().equals(gro.getDepartment().getId()))
             ? List.of(gro.getDepartment().getId())
             : List.of(gro.getDepartment().getId(), unassigned.getId());
         return grievanceRepository.findByDepartmentIdInAndStatusIn(
@@ -200,8 +200,8 @@ public class GrievanceService {
     }
 
     /**
-     * Returns the "Unassigned" placeholder department,
-     * creating it on first use. Satisfies the NOT NULL constraint
+     * Returns the "General Administration" fallback department,
+     * creating it on first use if not yet seeded. Satisfies the NOT NULL constraint
      * until real AI classification arrives in Phase 3.
      */
     private Department getPlaceholderDepartment() {
@@ -209,7 +209,8 @@ public class GrievanceService {
                 .orElseGet(() -> {
                     Department placeholder = new Department();
                     placeholder.setName(PLACEHOLDER_DEPARTMENT);
-                    placeholder.setCode("UNASSIGNED"); // Required by NOT NULL constraint
+                    placeholder.setCode("GEN_ADMIN");
+                    placeholder.setDescription("General municipal administration and unassigned grievances");
                     return departmentRepository.save(placeholder);
                 });
     }
