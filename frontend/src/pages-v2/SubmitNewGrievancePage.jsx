@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import api from '../services/api';
+import { useAuth } from '../context/useAuth';
 
 /**
  * SubmitNewGrievancePage (v2)
@@ -14,35 +16,65 @@ import { Link, useNavigate } from 'react-router-dom';
  */
 export default function SubmitNewGrievancePage() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [screenState, setScreenState] = useState('active'); // 'active' | 'error' | 'loading' | 'success'
-  const [subject, setSubject] = useState('Broken water main causing street flooding on 5th Ave');
+  const [subject, setSubject] = useState('');
   const [category, setCategory] = useState('water');
-  const [description, setDescription] = useState(
-    'Fresh drinking water has been gushing from the junction manhole since early morning today.'
-  );
+  const [description, setDescription] = useState('');
   const [copied, setCopied] = useState(false);
+  const [submittedDocket, setSubmittedDocket] = useState(null);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // MOCK DATA - replaced with real API data in a later session
-  const mockGeneratedDocketId = 'GRV-E89240M1';
-
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
-    if (!subject.trim() || description.trim().length < 20) {
+    setErrorMessage('');
+
+    if (!subject.trim()) {
+      setErrorMessage('Subject line is required.');
+      setScreenState('error');
+      return;
+    }
+    if (description.trim().length < 20) {
+      setErrorMessage('Description must be between 20 and 5000 characters (minimum 20 characters required).');
       setScreenState('error');
       return;
     }
 
     setScreenState('loading');
-    // MOCK DATA - replaced with real API data in a later session
-    setTimeout(() => {
-      setScreenState('success');
-    }, 1500);
+    try {
+      const res = await api.post('/api/grievances', {
+        subject: subject.trim(),
+        description: description.trim(),
+      });
+
+      if (res.data && res.data.success) {
+        setSubmittedDocket(res.data.data);
+        setScreenState('success');
+      } else {
+        setErrorMessage(res.data?.message || 'Failed to submit grievance.');
+        setScreenState('error');
+      }
+    } catch (err) {
+      console.error('Failed to submit grievance:', err);
+      const backendError =
+        err.response?.data?.message ||
+        (typeof err.response?.data?.data === 'string' ? err.response?.data?.data : null) ||
+        'Grievance rejected by backend validation. Please check your submission.';
+      setErrorMessage(backendError);
+      setScreenState('error');
+    }
   };
 
   const copyDocketID = () => {
-    navigator.clipboard?.writeText(mockGeneratedDocketId);
+    const idToCopy = submittedDocket?.trackingId || 'GRV-E89240M1';
+    navigator.clipboard?.writeText(idToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/v2/citizen-login');
   };
 
   return (
@@ -93,7 +125,9 @@ export default function SubmitNewGrievancePage() {
             <span className="material-symbols-outlined text-secondary text-sm">verified_user</span>
             <div className="flex flex-col">
               <span className="font-label-sm text-label-sm text-on-surface font-semibold">Citizen ID Card</span>
-              <span className="font-code-tracking text-code-tracking text-on-surface-variant">UID-VNC-7821</span>
+              <span className="font-code-tracking text-code-tracking text-on-surface-variant">
+                {user?.userId ? `UID-CIT-00${user.userId}` : 'UID-VNC-7821'}
+              </span>
             </div>
           </div>
         </div>
@@ -117,17 +151,20 @@ export default function SubmitNewGrievancePage() {
                 src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
               />
               <div className="hidden md:flex flex-col">
-                <span className="font-label-lg text-label-lg text-on-surface leading-tight">Eleanor Vance</span>
+                <span className="font-label-lg text-label-lg text-on-surface leading-tight">
+                  {user?.email ? user.email.split('@')[0] : 'Citizen Resident'}
+                </span>
                 <span className="font-label-sm text-label-sm text-on-surface-variant">Verified Citizen</span>
               </div>
             </div>
-            <Link
-              to="/v2/citizen-login"
+            <button
+              type="button"
+              onClick={handleLogout}
               className="inline-flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg border border-outline-variant hover:bg-error-container hover:text-on-error-container text-on-surface-variant font-label-md text-label-md transition-colors"
             >
               <span className="material-symbols-outlined text-base">logout</span>
               <span>Logout</span>
-            </Link>
+            </button>
           </div>
         </header>
 
@@ -233,12 +270,19 @@ export default function SubmitNewGrievancePage() {
                   <div className="w-full bg-error-container text-on-error-container p-space-md rounded-xl shadow-sm flex items-start gap-space-md">
                     <span className="material-symbols-outlined text-error text-2xl mt-0.5">report_problem</span>
                     <div className="flex flex-col flex-1">
-                      <span className="font-label-lg text-label-lg font-bold">Please correct 2 submission discrepancies:</span>
-                      <ul className="font-body-sm text-body-sm list-disc list-inside mt-1 space-y-0.5">
-                        <li><strong>Subject Line Required:</strong> Grievance summary cannot be empty.</li>
-                        <li><strong>Description Too Short:</strong> Minimum 20 characters required.</li>
-                      </ul>
+                      <span className="font-label-lg text-label-lg font-bold">Submission Discrepancy:</span>
+                      <p className="font-body-sm text-body-sm mt-1">
+                        {errorMessage || 'Please verify that the subject line is provided and description is at least 20 characters.'}
+                      </p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setScreenState('active')}
+                      className="text-on-error-container hover:opacity-80 p-1"
+                      title="Dismiss error"
+                    >
+                      <span className="material-symbols-outlined text-sm">close</span>
+                    </button>
                   </div>
                 )}
 
@@ -292,7 +336,7 @@ export default function SubmitNewGrievancePage() {
                             Permanent Docket Tracking Number
                           </span>
                           <span className="font-code-tracking text-xl font-bold text-on-surface tracking-wider">
-                            {mockGeneratedDocketId}
+                            {submittedDocket?.trackingId || 'GRV-E89240M1'}
                           </span>
                         </div>
                       </div>
@@ -313,18 +357,20 @@ export default function SubmitNewGrievancePage() {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-space-md text-left">
                         <div>
                           <span className="font-label-sm text-label-sm text-on-surface-variant block">Subject</span>
-                          <span className="font-title-md text-title-md text-on-surface font-semibold">{subject}</span>
+                          <span className="font-title-md text-title-md text-on-surface font-semibold">
+                            {submittedDocket?.subject || subject}
+                          </span>
                         </div>
                         <div>
                           <span className="font-label-sm text-label-sm text-on-surface-variant block">Assigned Directorate</span>
                           <span className="font-title-md text-title-md text-on-surface font-semibold">
-                            Municipal Water Supply & Sewerage
+                            {submittedDocket?.departmentName || 'General Grievance Directorate'}
                           </span>
                         </div>
                         <div>
                           <span className="font-label-sm text-label-sm text-on-surface-variant block">Lodgement Timestamp</span>
                           <span className="font-code-tracking text-code-tracking text-on-surface block mt-1">
-                            24 OCT 2024 • 14:32:09 IST
+                            {submittedDocket?.createdAt ? new Date(submittedDocket.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'medium' }) : new Date().toLocaleString()}
                           </span>
                         </div>
                       </div>
@@ -342,6 +388,16 @@ export default function SubmitNewGrievancePage() {
                       >
                         Return to Citizen Dashboard
                       </Link>
+                      {submittedDocket && (
+                        <button
+                          type="button"
+                          onClick={() => navigate('/v2/citizen-grievance-detail', { state: { grievanceId: submittedDocket.id, trackingId: submittedDocket.trackingId, grievance: submittedDocket } })}
+                          className="w-full sm:w-auto px-space-md py-space-md rounded-lg bg-surface-container hover:bg-surface-container-high text-secondary font-label-lg text-label-lg font-semibold transition-colors flex items-center justify-center gap-space-xs"
+                        >
+                          <span className="material-symbols-outlined text-base">visibility</span>
+                          View Docket Details
+                        </button>
+                      )}
                       <Link
                         to="/v2/public-tracking"
                         className="w-full sm:w-auto px-space-lg py-space-md rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface font-label-lg text-label-lg font-semibold transition-colors flex items-center justify-center gap-space-xs"
@@ -354,6 +410,7 @@ export default function SubmitNewGrievancePage() {
                         onClick={() => {
                           setSubject('');
                           setDescription('');
+                          setSubmittedDocket(null);
                           setScreenState('active');
                         }}
                         className="text-secondary hover:underline font-label-md text-label-md sm:ml-auto"

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import api from '../services/api';
 
 /**
  * PublicTrackingStatusPage (v2)
@@ -14,16 +15,18 @@ import { Link } from 'react-router-dom';
  * - Visual Stepper Progress Bar (Registered -> Triaged -> Field Inspection -> Resolved)
  */
 export default function PublicTrackingStatusPage() {
-  const [docketInput, setDocketInput] = useState('GRV-B7A231C4');
-  const [simState, setSimState] = useState('results'); // 'results' | 'rejected' | 'initial' | 'error' | 'loading'
+  const [docketInput, setDocketInput] = useState('');
+  const [trackingResult, setTrackingResult] = useState(null);
+  const [simState, setSimState] = useState('initial'); // 'results' | 'rejected' | 'initial' | 'error' | 'loading'
+  const [errorMessage, setErrorMessage] = useState('');
   const [copied, setCopied] = useState(false);
 
-  // MOCK DATA - replaced with real API data in a later session
+  // Fallback demo data for manual testing if needed
   const mockResult = {
     id: 'GRV-B7A231C4',
     tier: 'Tier-1 Redressal',
-    status: simState === 'rejected' ? 'Rejected' : 'In Progress',
-    priority: 'High',
+    status: simState === 'rejected' ? 'REJECTED' : 'IN_PROGRESS',
+    priority: 'HIGH',
     directorate: 'Municipal Water Supply & Sewerage Directorate',
     dept: 'Public Health Engineering Dept',
     lodgementDate: 'Oct 14, 2024',
@@ -31,23 +34,103 @@ export default function PublicTrackingStatusPage() {
     slaNote: simState === 'rejected' ? 'Closed (Terminal Outcome)' : 'On Schedule (SLA: 48h remaining)',
   };
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (!docketInput.trim()) return;
-
-    setSimState('loading');
-    // MOCK DATA - replaced with real API data in a later session
-    setTimeout(() => {
-      if (docketInput.trim().toUpperCase() === 'GRV-B7A231C4' || docketInput.trim().length > 3) {
-        setSimState('results');
-      } else {
-        setSimState('error');
-      }
-    }, 600);
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch {
+      return dateStr;
+    }
   };
 
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const fetchTracking = async (trackingId) => {
+    const cleanId = (trackingId || docketInput).trim().toUpperCase();
+    if (!cleanId) return;
+
+    setSimState('loading');
+    setErrorMessage('');
+    try {
+      const res = await api.get(`/api/grievances/track/${encodeURIComponent(cleanId)}`);
+      if (res.data && res.data.success && res.data.data) {
+        const data = res.data.data;
+        setTrackingResult(data);
+        if (data.status === 'REJECTED') {
+          setSimState('rejected');
+        } else {
+          setSimState('results');
+        }
+      } else {
+        setErrorMessage(res.data?.message || 'Docket reference not found.');
+        setSimState('error');
+      }
+    } catch (err) {
+      console.error('Failed to track grievance:', err);
+      const msg =
+        err.response?.data?.message ||
+        `We could not locate any public record for tracking code "${cleanId}". Please verify the characters.`;
+      setErrorMessage(msg);
+      setSimState('error');
+    }
+  };
+
+  const handleSearch = (e) => {
+    if (e) e.preventDefault();
+    fetchTracking(docketInput);
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const trackingIdParam = params.get('trackingId');
+    if (trackingIdParam) {
+      setDocketInput(trackingIdParam);
+      fetchTracking(trackingIdParam);
+    }
+  }, []);
+
+  const activeResult = trackingResult
+    ? {
+        id: trackingResult.trackingId,
+        tier: 'Central Redressal Gateway',
+        status: trackingResult.status,
+        priority: trackingResult.priority || 'MEDIUM',
+        directorate: trackingResult.departmentName || 'Public Grievance Redressal Dept',
+        dept: 'Redressal Operations Division',
+        lodgementDate: formatDate(trackingResult.createdAt),
+        latestUpdate: formatDateTime(trackingResult.updatedAt || trackingResult.createdAt),
+        slaNote:
+          trackingResult.status === 'REJECTED'
+            ? 'Closed (Terminal Outcome)'
+            : trackingResult.status === 'RESOLVED'
+            ? 'Concluded & Resolved'
+            : trackingResult.status === 'IN_PROGRESS'
+            ? 'Under Active Investigation'
+            : 'Assigned to Redressal Queue',
+      }
+    : mockResult;
+
   const copyTrackingId = () => {
-    navigator.clipboard?.writeText(mockResult.id);
+    navigator.clipboard?.writeText(activeResult.id);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -179,7 +262,10 @@ export default function PublicTrackingStatusPage() {
                   <div className="flex flex-wrap items-center gap-space-xs">
                     <button
                       type="button"
-                      onClick={() => setSimState('results')}
+                      onClick={() => {
+                        setTrackingResult(null);
+                        setSimState('results');
+                      }}
                       className={`px-space-sm py-1 rounded font-label-sm text-label-sm transition-colors ${
                         simState === 'results' ? 'bg-secondary text-on-secondary shadow-sm font-semibold' : 'bg-surface-container-lowest text-on-surface hover:bg-surface-container'
                       }`}
@@ -188,7 +274,10 @@ export default function PublicTrackingStatusPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setSimState('rejected')}
+                      onClick={() => {
+                        setTrackingResult(null);
+                        setSimState('rejected');
+                      }}
                       className={`px-space-sm py-1 rounded font-label-sm text-label-sm transition-colors ${
                         simState === 'rejected' ? 'bg-error text-on-error shadow-sm font-semibold' : 'bg-surface-container-lowest text-on-surface hover:bg-surface-container'
                       }`}
@@ -197,7 +286,10 @@ export default function PublicTrackingStatusPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setSimState('initial')}
+                      onClick={() => {
+                        setTrackingResult(null);
+                        setSimState('initial');
+                      }}
                       className={`px-space-sm py-1 rounded font-label-sm text-label-sm transition-colors ${
                         simState === 'initial' ? 'bg-secondary text-on-secondary shadow-sm font-semibold' : 'bg-surface-container-lowest text-on-surface hover:bg-surface-container'
                       }`}
@@ -206,7 +298,11 @@ export default function PublicTrackingStatusPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setSimState('error')}
+                      onClick={() => {
+                        setTrackingResult(null);
+                        setErrorMessage('Sample 404: Docket reference not found.');
+                        setSimState('error');
+                      }}
                       className={`px-space-sm py-1 rounded font-label-sm text-label-sm transition-colors ${
                         simState === 'error' ? 'bg-error text-on-error shadow-sm font-semibold' : 'bg-surface-container-lowest text-on-surface hover:bg-surface-container'
                       }`}
@@ -241,12 +337,12 @@ export default function PublicTrackingStatusPage() {
                             </span>
                             <span className="h-1.5 w-1.5 rounded-full bg-secondary" />
                             <span className="font-label-sm text-label-sm text-secondary font-semibold">
-                              {mockResult.tier}
+                              {activeResult.tier}
                             </span>
                           </div>
                           <div className="flex items-center gap-space-sm">
                             <span className="font-headline-md text-headline-md text-on-surface font-code-tracking font-bold tracking-tight">
-                              {mockResult.id}
+                              {activeResult.id}
                             </span>
                             <button
                               type="button"
@@ -263,20 +359,30 @@ export default function PublicTrackingStatusPage() {
 
                         {/* Badges */}
                         <div className="flex flex-wrap items-center gap-space-sm">
-                          {simState === 'rejected' ? (
+                          {activeResult.status === 'REJECTED' || simState === 'rejected' ? (
                             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-error-container text-on-error-container font-label-md text-label-md">
                               <span className="inline-block w-2 h-2 rounded-full bg-error" />
                               <span className="font-bold">Closed / Rejected</span>
                             </div>
+                          ) : activeResult.status === 'RESOLVED' ? (
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-md text-label-md">
+                              <span className="inline-block w-2 h-2 rounded-full bg-secondary" />
+                              <span className="font-bold">Resolved</span>
+                            </div>
+                          ) : activeResult.status === 'PENDING' ? (
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-high text-on-surface font-label-md text-label-md">
+                              <span className="inline-block w-2 h-2 rounded-full bg-outline" />
+                              <span>Pending Triage</span>
+                            </div>
                           ) : (
                             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-md text-label-md">
                               <span className="inline-block w-2 h-2 rounded-full bg-secondary animate-pulse" />
-                              <span>{mockResult.status}</span>
+                              <span>In Progress</span>
                             </div>
                           )}
                           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container text-on-background font-label-md text-label-md">
                             <span className="material-symbols-outlined text-sm text-error">priority_high</span>
-                            <span>Priority: {mockResult.priority}</span>
+                            <span>Priority: {activeResult.priority}</span>
                           </div>
                         </div>
                       </div>
@@ -296,16 +402,16 @@ export default function PublicTrackingStatusPage() {
                             Assigned Directorate
                           </span>
                           <span className="font-title-md text-title-md text-on-surface font-bold">
-                            {mockResult.directorate}
+                            {activeResult.directorate}
                           </span>
-                          <span className="font-body-sm text-body-sm text-on-surface-variant">{mockResult.dept}</span>
+                          <span className="font-body-sm text-body-sm text-on-surface-variant">{activeResult.dept}</span>
                         </div>
                         <div className="p-space-md bg-surface-container-low rounded-lg shadow-sm flex flex-col gap-space-xs">
                           <span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">
                             Lodgement Date
                           </span>
                           <span className="font-title-md text-title-md text-on-surface font-code-tracking font-bold">
-                            {mockResult.lodgementDate}
+                            {activeResult.lodgementDate}
                           </span>
                           <span className="font-body-sm text-body-sm text-on-surface-variant">Central Intake Gateway</span>
                         </div>
@@ -314,10 +420,10 @@ export default function PublicTrackingStatusPage() {
                             Latest Official Update
                           </span>
                           <span className="font-title-md text-title-md text-on-surface font-code-tracking font-bold">
-                            {mockResult.latestUpdate}
+                            {activeResult.latestUpdate}
                           </span>
                           <span className="font-body-sm text-body-sm text-secondary flex items-center gap-1 font-semibold">
-                            <span className="material-symbols-outlined text-sm">schedule</span> {mockResult.slaNote}
+                            <span className="material-symbols-outlined text-sm">schedule</span> {activeResult.slaNote}
                           </span>
                         </div>
                       </div>
@@ -328,13 +434,23 @@ export default function PublicTrackingStatusPage() {
                           <span className="font-title-md text-title-md text-on-surface font-bold">
                             Redressal Milestone Trajectory
                           </span>
-                          <span className={`font-label-sm text-label-sm uppercase font-semibold ${simState === 'rejected' ? 'text-error' : 'text-on-surface-variant'}`}>
-                            {simState === 'rejected' ? 'Terminal Alternate Branch (Closed)' : 'Stage 3 of 4 Active'}
+                          <span className={`font-label-sm text-label-sm uppercase font-semibold ${
+                            activeResult.status === 'REJECTED' || simState === 'rejected'
+                              ? 'text-error'
+                              : 'text-on-surface-variant'
+                          }`}>
+                            {activeResult.status === 'REJECTED' || simState === 'rejected'
+                              ? 'Terminal Alternate Branch (Closed)'
+                              : activeResult.status === 'RESOLVED'
+                              ? 'Stage 4 of 4 Concluded (Resolved)'
+                              : activeResult.status === 'PENDING'
+                              ? 'Stage 1 of 4 Active (Docket Registered)'
+                              : 'Stage 3 of 4 Active (In Progress)'}
                           </span>
                         </div>
 
                         {/* Stepper Bar */}
-                        {simState === 'rejected' ? (
+                        {activeResult.status === 'REJECTED' || simState === 'rejected' ? (
                           <div className="flex flex-col gap-4">
                             <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md md:gap-0 w-full pt-4">
                               <div className="hidden md:block absolute left-8 right-8 top-8 h-1 bg-surface-container-high -z-0">
@@ -348,7 +464,7 @@ export default function PublicTrackingStatusPage() {
                                 </div>
                                 <div>
                                   <span className="font-label-md text-label-md font-bold text-on-surface block">Registered</span>
-                                  <span className="font-body-sm text-xs text-on-surface-variant block">Oct 14</span>
+                                  <span className="font-body-sm text-xs text-on-surface-variant block">{activeResult.lodgementDate}</span>
                                 </div>
                               </div>
 
@@ -359,7 +475,7 @@ export default function PublicTrackingStatusPage() {
                                 </div>
                                 <div>
                                   <span className="font-label-md text-label-md font-bold text-on-surface block">Triaged by GRO</span>
-                                  <span className="font-body-sm text-xs text-on-surface-variant block">Oct 15</span>
+                                  <span className="font-body-sm text-xs text-on-surface-variant block">{activeResult.latestUpdate}</span>
                                 </div>
                               </div>
 
@@ -382,7 +498,7 @@ export default function PublicTrackingStatusPage() {
                                 <div>
                                   <span className="font-title-md font-bold block text-error">Terminal Determination: Grievance Rejected</span>
                                   <span className="font-body-sm text-on-error-container block mt-0.5">
-                                    Docket concluded at initial triage: Issue determined non-jurisdictional or administrative duplicate. This is a terminal outcome, not an intermediate sequential milestone.
+                                    Docket concluded at administrative triage: Issue determined non-jurisdictional, deficient in grounds, or administrative duplicate. This is a terminal outcome, not an intermediate sequential milestone.
                                   </span>
                                 </div>
                               </div>
@@ -398,7 +514,17 @@ export default function PublicTrackingStatusPage() {
                         ) : (
                           <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md md:gap-0 w-full pt-4">
                             <div className="hidden md:block absolute left-8 right-8 top-8 h-1 bg-surface-container-high -z-0">
-                              <div className="h-full bg-secondary rounded-full" style={{ width: '68%' }} />
+                              <div
+                                className="h-full bg-secondary rounded-full transition-all duration-500"
+                                style={{
+                                  width:
+                                    activeResult.status === 'RESOLVED'
+                                      ? '100%'
+                                      : activeResult.status === 'IN_PROGRESS'
+                                      ? '68%'
+                                      : '25%',
+                                }}
+                              />
                             </div>
 
                             {/* Step 1: Registered */}
@@ -408,40 +534,94 @@ export default function PublicTrackingStatusPage() {
                               </div>
                               <div>
                                 <span className="font-label-md text-label-md font-bold text-on-surface block">Registered</span>
-                                <span className="font-body-sm text-xs text-on-surface-variant block">Oct 14</span>
+                                <span className="font-body-sm text-xs text-on-surface-variant block">{activeResult.lodgementDate}</span>
                               </div>
                             </div>
 
                             {/* Step 2: Triaged */}
                             <div className="relative z-10 flex md:flex-col items-center gap-space-sm text-left md:text-center w-full md:w-1/4">
-                              <div className="w-8 h-8 rounded-full bg-secondary text-on-secondary flex items-center justify-center font-bold text-xs shadow-sm">
-                                <span className="material-symbols-outlined text-sm">check</span>
+                              <div
+                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-sm ${
+                                  activeResult.status === 'PENDING'
+                                    ? 'bg-secondary-fixed ring-4 ring-secondary/20 text-on-secondary-fixed animate-pulse'
+                                    : 'bg-secondary text-on-secondary'
+                                }`}
+                              >
+                                {activeResult.status === 'PENDING' ? (
+                                  <span className="material-symbols-outlined text-sm text-secondary">sync</span>
+                                ) : (
+                                  <span className="material-symbols-outlined text-sm">check</span>
+                                )}
                               </div>
                               <div>
                                 <span className="font-label-md text-label-md font-bold text-on-surface block">Triaged by GRO</span>
-                                <span className="font-body-sm text-xs text-on-surface-variant block">Oct 15</span>
+                                <span className="font-body-sm text-xs text-on-surface-variant block">
+                                  {activeResult.status === 'PENDING' ? 'Pending Review' : activeResult.latestUpdate}
+                                </span>
                               </div>
                             </div>
 
-                            {/* Step 3: Field Inspection (Active) */}
-                            <div className="relative z-10 flex md:flex-col items-center gap-space-sm text-left md:text-center w-full md:w-1/4">
-                              <div className="w-8 h-8 rounded-full bg-secondary-fixed ring-4 ring-secondary/20 text-on-secondary-fixed flex items-center justify-center font-bold text-xs shadow-sm animate-pulse">
-                                <span className="material-symbols-outlined text-sm text-secondary">sync</span>
+                            {/* Step 3: Field Inspection / Action */}
+                            <div
+                              className={`relative z-10 flex md:flex-col items-center gap-space-sm text-left md:text-center w-full md:w-1/4 ${
+                                activeResult.status === 'PENDING' ? 'opacity-50' : ''
+                              }`}
+                            >
+                              <div
+                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-sm ${
+                                  activeResult.status === 'RESOLVED'
+                                    ? 'bg-secondary text-on-secondary'
+                                    : activeResult.status === 'IN_PROGRESS'
+                                    ? 'bg-secondary-fixed ring-4 ring-secondary/20 text-on-secondary-fixed animate-pulse'
+                                    : 'bg-surface-container text-on-surface-variant'
+                                }`}
+                              >
+                                {activeResult.status === 'RESOLVED' ? (
+                                  <span className="material-symbols-outlined text-sm">check</span>
+                                ) : activeResult.status === 'IN_PROGRESS' ? (
+                                  <span className="material-symbols-outlined text-sm text-secondary">sync</span>
+                                ) : (
+                                  '3'
+                                )}
                               </div>
                               <div>
-                                <span className="font-label-md text-label-md font-bold text-secondary block">Inspection Dispatched</span>
-                                <span className="font-body-sm text-xs text-on-surface-variant block">In Progress</span>
+                                <span className="font-label-md text-label-md font-bold text-on-surface block">
+                                  Inspection / Action
+                                </span>
+                                <span className="font-body-sm text-xs text-on-surface-variant block">
+                                  {activeResult.status === 'RESOLVED'
+                                    ? 'Completed'
+                                    : activeResult.status === 'IN_PROGRESS'
+                                    ? 'In Progress'
+                                    : 'Pending'}
+                                </span>
                               </div>
                             </div>
 
                             {/* Step 4: Resolution */}
-                            <div className="relative z-10 flex md:flex-col items-center gap-space-sm text-left md:text-center w-full md:w-1/4 opacity-50">
-                              <div className="w-8 h-8 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center font-bold text-xs">
-                                4
+                            <div
+                              className={`relative z-10 flex md:flex-col items-center gap-space-sm text-left md:text-center w-full md:w-1/4 ${
+                                activeResult.status !== 'RESOLVED' ? 'opacity-50' : ''
+                              }`}
+                            >
+                              <div
+                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                                  activeResult.status === 'RESOLVED'
+                                    ? 'bg-secondary text-on-secondary shadow-sm'
+                                    : 'bg-surface-container text-on-surface-variant'
+                                }`}
+                              >
+                                {activeResult.status === 'RESOLVED' ? (
+                                  <span className="material-symbols-outlined text-sm">check</span>
+                                ) : (
+                                  '4'
+                                )}
                               </div>
                               <div>
                                 <span className="font-label-md text-label-md text-on-surface block">Resolution Closure</span>
-                                <span className="font-body-sm text-xs text-on-surface-variant block">Pending</span>
+                                <span className="font-body-sm text-xs text-on-surface-variant block">
+                                  {activeResult.status === 'RESOLVED' ? 'Concluded' : 'Pending'}
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -460,7 +640,7 @@ export default function PublicTrackingStatusPage() {
                     <div className="max-w-md">
                       <h3 className="font-headline-sm font-bold text-on-surface">Enter a Docket Tracking ID</h3>
                       <p className="font-body-md text-on-surface-variant mt-1">
-                        Use the tracking ID received via SMS or email when your petition was registered (e.g. GRV-B7A231C4) to view public audit status.
+                        Use the tracking ID received when your petition was submitted (e.g. GRV-XXXXXXXX) to view public audit status.
                       </p>
                     </div>
                   </div>
@@ -475,15 +655,20 @@ export default function PublicTrackingStatusPage() {
                     <div className="max-w-md">
                       <h3 className="font-headline-sm font-bold">Docket Reference Not Found</h3>
                       <p className="font-body-md mt-1">
-                        We could not locate any public record for the entered tracking code. Please verify the characters or contact the district helpline.
+                        {errorMessage ||
+                          'We could not locate any public record for the entered tracking code. Please verify the characters or contact the department helpline.'}
                       </p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setSimState('results')}
-                      className="px-space-md py-2 bg-on-error-container text-error-container rounded-lg font-label-md font-semibold"
+                      onClick={() => {
+                        setDocketInput('');
+                        setTrackingResult(null);
+                        setSimState('initial');
+                      }}
+                      className="px-space-md py-2 bg-on-error-container text-error-container rounded-lg font-label-md font-semibold hover:opacity-90 transition-opacity"
                     >
-                      Restore Sample Docket
+                      Clear & Try Another Code
                     </button>
                   </div>
                 )}
@@ -492,7 +677,7 @@ export default function PublicTrackingStatusPage() {
                 {simState === 'loading' && (
                   <div className="w-full bg-surface-container-lowest p-space-xl rounded-xl shadow-sm flex flex-col items-center justify-center text-center py-20 gap-space-md">
                     <div className="w-14 h-14 rounded-full border-4 border-surface-container border-t-secondary animate-spin" />
-                    <span className="font-headline-sm font-bold text-on-surface">Querying National Civic Registry...</span>
+                    <span className="font-headline-sm font-bold text-on-surface">Querying Central Civic Registry...</span>
                   </div>
                 )}
               </div>
