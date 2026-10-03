@@ -7,12 +7,14 @@ import com.college.grievanceportal.dto.RegisterRequestDto;
 import com.college.grievanceportal.model.entity.User;
 import com.college.grievanceportal.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -34,6 +36,7 @@ public class AuthService {
 
         User savedUser = userRepository.save(user);
         String token = jwtProvider.generateToken(savedUser);
+        log.info("User registered successfully: userId={}, email={}, role={}", savedUser.getId(), savedUser.getEmail(), savedUser.getRole());
 
         return buildAuthResponse(savedUser, token);
     }
@@ -47,6 +50,8 @@ public class AuthService {
         }
 
         String token = jwtProvider.generateToken(user);
+        log.info("User logged in successfully: userId={}, email={}, role={}", user.getId(), user.getEmail(), user.getRole());
+
         return buildAuthResponse(user, token);
     }
 

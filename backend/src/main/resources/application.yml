@@ -43,4 +43,14 @@ app:
   seeder:
     gro-default-password: ${GRO_DEFAULT_PASSWORD:GroPassword123!}
   mail:
-    from: ${MAIL_FROM_ADDRESS:noreply@grievanceportal.gov}
+    from: ${MAIL_FROM_ADDRESS:noreply@grievanceportal.gov}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+

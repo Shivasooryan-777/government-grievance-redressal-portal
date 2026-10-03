@@ -12,6 +12,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PatchMapping;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/feedback")
 @RequiredArgsConstructor
+@Tag(name = "Feedback & Appeals", description = "Endpoints for citizen resolution appeals and feedback escalation")
 public class FeedbackController {
 
     private final GrievanceService grievanceService;
@@ -41,6 +44,10 @@ public class FeedbackController {
      */
     @PatchMapping("/{feedbackId}/appeal")
     @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(
+            summary = "Raise resolution appeal for grievance",
+            description = "Reopens a previously resolved grievance to IN_PROGRESS and escalates priority to HIGH based on citizen justification. Restricted to the grievance owner."
+    )
     public ResponseEntity<ApiResponse<GrievanceResponseDto>> raiseAppeal(
             @PathVariable Long feedbackId,
             @Valid @RequestBody AppealRequestDto requestDto,
