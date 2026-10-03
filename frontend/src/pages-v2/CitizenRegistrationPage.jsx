@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import api from '../services/api';
 
 /**
  * CitizenRegistrationPage (v2)
@@ -8,11 +9,13 @@ import { Link } from 'react-router-dom';
  * Preserves exact layout, trust stature panel, interactive state simulator, and form elements.
  */
 export default function CitizenRegistrationPage() {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
-    fullname: 'Eleanor Vance',
-    email: 'eleanor.vance@example.com',
-    phone: '(555) 234-5678',
-    password: 'password123',
+    fullname: '',
+    email: '',
+    phone: '',
+    password: '',
     consent: true,
   });
 
@@ -21,6 +24,7 @@ export default function CitizenRegistrationPage() {
   const [passwordError, setPasswordError] = useState(false);
   const [networkError, setNetworkError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -30,29 +34,55 @@ export default function CitizenRegistrationPage() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setApiError('');
+    setEmailError(false);
+    setPasswordError(false);
+
     if (!formData.email.includes('@') || !formData.email.includes('.')) {
       setEmailError(true);
       return;
     }
-    if (formData.password.length < 8) {
+    if (formData.password.length < 6) {
       setPasswordError(true);
       return;
     }
 
     setIsLoading(true);
-    // MOCK DATA - replaced with real API data in a later session
-    setTimeout(() => {
+    try {
+      const res = await api.post('/api/auth/register', {
+        name: formData.fullname.trim(),
+        email: formData.email.trim(),
+        phoneNumber: formData.phone.trim(),
+        password: formData.password,
+        role: 'CITIZEN',
+      });
+
+      if (res.data.success) {
+        navigate('/v2/citizen-login');
+      } else {
+        setApiError(res.data.message || 'Registration failed.');
+      }
+    } catch (err) {
+      const body = err.response?.data;
+      if (body?.data && typeof body.data === 'object') {
+        // Field-level validation errors map: { fieldName: message }
+        const messages = Object.values(body.data).join(' • ');
+        setApiError(messages);
+      } else {
+        setApiError(body?.message || 'Registration failed. Please check your credentials.');
+      }
+    } finally {
       setIsLoading(false);
-      alert('Mock Account Created Successfully! Ready for Phase 2 API integration.');
-    }, 1200);
+    }
   };
 
   const resetAll = () => {
     setEmailError(false);
     setPasswordError(false);
     setNetworkError(false);
+    setApiError('');
     setIsLoading(false);
     setFormData({
       fullname: '',
@@ -261,6 +291,24 @@ export default function CitizenRegistrationPage() {
                       Register once to lodge civic grievances, receive SMS/email docket updates, and track resolution timelines.
                     </p>
                   </div>
+
+                  {/* Dynamic Registration Error Alert */}
+                  {apiError && (
+                    <div className="p-space-md bg-error-container text-on-error-container rounded-lg flex items-start gap-space-sm border-l-4 border-error">
+                      <span className="material-symbols-outlined text-[20px] text-error flex-shrink-0 mt-0.5">error</span>
+                      <div className="flex-1">
+                        <p className="font-label-md text-label-md font-semibold text-error">Registration Alert</p>
+                        <p className="font-body-sm text-body-sm text-on-error-container mt-0.5">{apiError}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setApiError('')}
+                        className="text-on-error-container hover:opacity-75"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                      </button>
+                    </div>
+                  )}
 
                   {/* Registration Form */}
                   <form className="flex flex-col gap-space-md" onSubmit={handleSubmit} noValidate>
