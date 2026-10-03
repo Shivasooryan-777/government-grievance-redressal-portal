@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/useAuth';
 
 /**
  * GroOfficerLoginPage (v2)
@@ -11,20 +12,33 @@ import { Link } from 'react-router-dom';
  * - Interactive test harness: Default, Clearance Check (Loading), Invalid Auth Error, Citizen Account Detected
  */
 export default function GroOfficerLoginPage() {
+  const { login, logout } = useAuth();
+  const navigate = useNavigate();
+
   const [demoState, setDemoState] = useState('normal'); // 'normal' | 'loading' | 'invalid' | 'citizen'
-  const [email, setEmail] = useState('officer.jenkins@dept.gov');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [auditConsent, setAuditConsent] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setDemoState('loading');
+    setErrorMessage('');
 
-    // MOCK DATA - replaced with real API data in a later session
-    setTimeout(() => {
-      setDemoState('citizen');
-    }, 1200);
+    try {
+      const role = await login(email, password);
+      if (role !== 'GRO') {
+        logout();
+        setDemoState('citizen');
+        return;
+      }
+      navigate('/v2/gro-dashboard');
+    } catch (err) {
+      setDemoState('invalid');
+      setErrorMessage(err.response?.data?.message || 'Authentication failed. Please verify your officer credentials.');
+    }
   };
 
   return (
@@ -230,7 +244,7 @@ export default function GroOfficerLoginPage() {
                             <div>
                               <span className="font-title-md font-bold block">Authentication Failed</span>
                               <span className="font-body-sm text-on-surface-variant">
-                                Authentication failed. Please verify your officer email and password.
+                                {errorMessage || 'Authentication failed. Please verify your officer email and password.'}
                               </span>
                             </div>
                           </div>

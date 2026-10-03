@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/useAuth';
 
 /**
  * CitizenLoginPage (v2)
@@ -9,27 +10,39 @@ import { Link } from 'react-router-dom';
  * Includes interactive state sandbox controls for easy visual testing of errors and loading states.
  */
 export default function CitizenLoginPage() {
-  // Interactive UI state (replaces raw DOM event listeners from Stitch)
-  const [email, setEmail] = useState('citizen@example.gov');
-  const [password, setPassword] = useState('password123');
+  const { login, logout } = useAuth();
+  const navigate = useNavigate();
+
+  // Form input state
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('Invalid email or password combination. Please check your credentials or reset your password.');
+  const [errorMessage, setErrorMessage] = useState('');
   const [rememberDevice, setRememberDevice] = useState(true);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setIsError(false);
+    setErrorMessage('');
 
-    // MOCK DATA - replaced with real API data in a later session
-    setTimeout(() => {
-      setIsLoading(false);
-      // Demo deterministic feedback
+    try {
+      const role = await login(email, password);
+      if (role !== 'CITIZEN') {
+        logout();
+        setIsError(true);
+        setErrorMessage('This portal is for citizen accounts.');
+        setIsLoading(false);
+        return;
+      }
+      navigate('/v2/citizen-dashboard');
+    } catch (err) {
       setIsError(true);
-      setErrorMessage('Invalid credentials. Please verify your civic registration.');
-    }, 1200);
+      setErrorMessage(err.response?.data?.message || 'Login failed.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -188,7 +201,7 @@ export default function CitizenLoginPage() {
                     {isError && (
                       <p className="font-body-sm text-body-sm text-error flex items-center gap-1 mt-1">
                         <span className="material-symbols-outlined text-[14px]">info</span>
-                        Password does not meet authorization registry requirements.
+                        {errorMessage || 'Authentication failed. Please verify your credentials.'}
                       </p>
                     )}
                   </div>
