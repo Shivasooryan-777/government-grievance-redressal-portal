@@ -4,7 +4,7 @@ import api from '../services/api';
 import { useAuth } from '../context/useAuth';
 
 /**
- * SubmitNewGrievancePage (v2)
+ * SubmitNewGrievancePage
  * Converted faithfully from Stitch export: submit_new_grievance
  * 
  * Features:
@@ -74,7 +74,7 @@ export default function SubmitNewGrievancePage() {
 
   const handleLogout = () => {
     logout();
-    navigate('/v2/citizen-login');
+    navigate('/citizen-login');
   };
 
   return (
@@ -98,21 +98,21 @@ export default function SubmitNewGrievancePage() {
           </div>
           <nav className="flex flex-col px-space-sm gap-space-xs">
             <Link
-              to="/v2/citizen-dashboard"
+              to="/dashboard"
               className="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-label-lg text-label-lg"
             >
               <span className="material-symbols-outlined text-xl">dashboard</span>
               <span>Dashboard</span>
             </Link>
             <Link
-              to="/v2/submit-grievance"
+              to="/submit"
               className="flex items-center gap-space-sm px-space-md py-space-sm transition-colors bg-surface-container text-secondary font-label-lg rounded-lg"
             >
               <span className="material-symbols-outlined text-xl">add_circle</span>
               <span>Submit Grievance</span>
             </Link>
             <Link
-              to="/v2/public-tracking"
+              to="/track"
               className="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-label-lg text-label-lg"
             >
               <span className="material-symbols-outlined text-xl">track_changes</span>
@@ -187,7 +187,7 @@ export default function SubmitNewGrievancePage() {
                     </span>
                   </div>
                   <nav className="flex items-center gap-space-xs font-body-sm text-body-sm text-on-surface-variant">
-                    <Link to="/v2/citizen-dashboard" className="hover:text-secondary transition-colors">
+                    <Link to="/dashboard" className="hover:text-secondary transition-colors">
                       Dashboard
                     </Link>
                     <span>/</span>
@@ -383,7 +383,7 @@ export default function SubmitNewGrievancePage() {
                     {/* CTAs */}
                     <div className="flex flex-col sm:flex-row items-center gap-space-md pt-space-sm">
                       <Link
-                        to="/v2/citizen-dashboard"
+                        to="/dashboard"
                         className="w-full sm:w-auto px-space-xl py-space-md rounded-lg bg-secondary text-on-secondary font-label-lg text-label-lg font-semibold hover:bg-secondary/90 transition-all text-center shadow-md"
                       >
                         Return to Citizen Dashboard
@@ -391,7 +391,7 @@ export default function SubmitNewGrievancePage() {
                       {submittedDocket && (
                         <button
                           type="button"
-                          onClick={() => navigate('/v2/citizen-grievance-detail', { state: { grievanceId: submittedDocket.id, trackingId: submittedDocket.trackingId, grievance: submittedDocket } })}
+                          onClick={() => navigate('/grievance-detail', { state: { grievanceId: submittedDocket.id, trackingId: submittedDocket.trackingId, grievance: submittedDocket } })}
                           className="w-full sm:w-auto px-space-md py-space-md rounded-lg bg-surface-container hover:bg-surface-container-high text-secondary font-label-lg text-label-lg font-semibold transition-colors flex items-center justify-center gap-space-xs"
                         >
                           <span className="material-symbols-outlined text-base">visibility</span>
@@ -399,7 +399,7 @@ export default function SubmitNewGrievancePage() {
                         </button>
                       )}
                       <Link
-                        to="/v2/public-tracking"
+                        to="/track"
                         className="w-full sm:w-auto px-space-lg py-space-md rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface font-label-lg text-label-lg font-semibold transition-colors flex items-center justify-center gap-space-xs"
                       >
                         <span className="material-symbols-outlined text-base">track_changes</span>
@@ -519,7 +519,7 @@ export default function SubmitNewGrievancePage() {
                     {/* Form Actions */}
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-space-md pt-space-sm border-t border-surface-container-high">
                       <Link
-                        to="/v2/citizen-dashboard"
+                        to="/dashboard"
                         className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface flex items-center gap-space-xs transition-colors order-2 sm:order-1"
                       >
                         <span className="material-symbols-outlined text-base">arrow_back</span>

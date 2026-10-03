@@ -4,7 +4,7 @@ import api from '../services/api';
 import { useAuth } from '../context/useAuth';
 
 /**
- * GroOfficerDashboardPage (v2)
+ * GroOfficerDashboardPage
  * Converted faithfully from Stitch export: gro_officer_dashboard
  * 
  * Features:
@@ -67,7 +67,7 @@ export default function GroOfficerDashboardPage() {
 
   const handleLogout = () => {
     logout();
-    navigate('/v2/gro-login');
+    navigate('/gro-login');
   };
 
   const activeCount = dockets.length;
@@ -115,21 +115,21 @@ export default function GroOfficerDashboardPage() {
           </div>
           <nav className="flex flex-col px-space-sm gap-space-xs">
             <Link
-              to="/v2/gro-dashboard"
+              to="/gro-dashboard"
               className="flex items-center gap-space-sm px-space-md py-space-sm transition-colors bg-surface-container text-secondary font-label-lg rounded-lg"
             >
               <span className="material-symbols-outlined text-xl">dashboard</span>
               <span>Dashboard</span>
             </Link>
             <Link
-              to="/v2/gro-ticket-detail"
+              to="/gro-ticket-detail"
               className="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-label-lg text-label-lg"
             >
               <span className="material-symbols-outlined text-xl">inbox</span>
               <span>Grievance Dossiers</span>
             </Link>
             <Link
-              to="/v2/public-tracking"
+              to="/track"
               className="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-label-lg text-label-lg"
             >
               <span className="material-symbols-outlined text-xl">track_changes</span>
@@ -474,7 +474,7 @@ export default function GroOfficerDashboardPage() {
                           <tr
                             key={row.id || row.trackingId}
                             onClick={() =>
-                              navigate('/v2/gro-ticket-detail', {
+                              navigate('/gro-ticket-detail', {
                                 state: { grievanceId: row.id, trackingId: row.trackingId, grievance: row },
                               })
                             }
@@ -567,7 +567,7 @@ export default function GroOfficerDashboardPage() {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate('/v2/gro-ticket-detail', {
+                                  navigate('/gro-ticket-detail', {
                                     state: { grievanceId: row.id, trackingId: row.trackingId, grievance: row },
                                   });
                                 }}

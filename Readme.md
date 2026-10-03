@@ -55,6 +55,19 @@ npm run dev
 ```
 Frontend runs at `http://localhost:5173` (or as configured).
 
+#### Application Routes
+| Route | Role / Access | Description |
+|---|---|---|
+| `/citizen-login` | Public | Citizen Portal Login |
+| `/register` | Public | Citizen Account Registration |
+| `/track` | Public | Anonymous Universal Docket Status Tracker |
+| `/dashboard` | Protected (`CITIZEN`) | Citizen Grievance Dossiers & Status Dashboard |
+| `/submit` | Protected (`CITIZEN`) | File New Grievance Docket with Priority & Tagging |
+| `/grievance-detail` | Protected (`CITIZEN`) | Full Grievance Audit Dossier, 5-Star Rating & Appeal Filing |
+| `/gro-login` | Public | Grievance Redressal Officer (GRO) Secure Login |
+| `/gro-dashboard` | Protected (`GRO`) | Department Queue, Escalation Alerts & Metrics |
+| `/gro-ticket-detail` | Protected (`GRO`) | Official Redressal Determination, Action Notes & Status Updates |
+
 ### Backend Environment Variables (see `backend/.env.example`)
 ```
 DB_URL=jdbc:postgresql://localhost:5432/grievance_db

@@ -4,7 +4,7 @@ import api from '../services/api';
 import { useAuth } from '../context/useAuth';
 
 /**
- * CitizenGrievanceDetailPage (v2)
+ * CitizenGrievanceDetailPage
  * Converted faithfully from Stitch export: citizen_grievance_detail_view
  * 
  * Features:
@@ -168,7 +168,7 @@ export default function CitizenGrievanceDetailPage() {
 
   const handleLogout = () => {
     logout();
-    navigate('/v2/citizen-login');
+    navigate('/citizen-login');
   };
 
   const formatDateTime = (dateStr) => {
@@ -229,21 +229,21 @@ export default function CitizenGrievanceDetailPage() {
           </div>
           <nav className="flex flex-col px-space-sm gap-space-xs">
             <Link
-              to="/v2/citizen-dashboard"
+              to="/dashboard"
               className="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-secondary bg-surface-container font-label-lg"
             >
               <span className="material-symbols-outlined text-xl">dashboard</span>
               <span>Dashboard</span>
             </Link>
             <Link
-              to="/v2/submit-grievance"
+              to="/submit"
               className="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-label-lg text-label-lg"
             >
               <span className="material-symbols-outlined text-xl">add_circle</span>
               <span>Submit Grievance</span>
             </Link>
             <Link
-              to="/v2/public-tracking"
+              to="/track"
               className="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-label-lg text-label-lg"
             >
               <span className="material-symbols-outlined text-xl">track_changes</span>
@@ -433,7 +433,7 @@ export default function CitizenGrievanceDetailPage() {
                     <span>Retry Transaction</span>
                   </button>
                   <Link
-                    to="/v2/citizen-dashboard"
+                    to="/dashboard"
                     className="px-space-md py-space-sm rounded-lg bg-surface-container text-on-surface-variant font-label-lg text-label-lg hover:text-on-surface transition-colors"
                   >
                     Back to Dashboard
@@ -454,13 +454,13 @@ export default function CitizenGrievanceDetailPage() {
                 </p>
                 <div className="flex items-center gap-space-md mt-space-lg">
                   <Link
-                    to="/v2/submit-grievance"
+                    to="/submit"
                     className="px-space-lg py-space-sm rounded-lg bg-secondary text-on-secondary font-label-lg text-label-lg shadow-sm hover:opacity-95 transition-opacity"
                   >
                     Lodge New Grievance
                   </Link>
                   <Link
-                    to="/v2/citizen-dashboard"
+                    to="/dashboard"
                     className="px-space-md py-space-sm rounded-lg bg-surface-container text-on-surface-variant font-label-lg text-label-lg hover:text-on-surface transition-colors"
                   >
                     Back to Dashboard
@@ -476,7 +476,7 @@ export default function CitizenGrievanceDetailPage() {
                 <div className="flex flex-wrap items-center justify-between gap-space-md">
                   <div className="flex items-center gap-space-sm">
                     <Link
-                      to="/v2/citizen-dashboard"
+                      to="/dashboard"
                       className="inline-flex items-center gap-space-xs px-space-sm py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-secondary font-label-lg text-label-lg transition-colors"
                     >
                       <span className="material-symbols-outlined text-base">arrow_back</span>
@@ -484,7 +484,7 @@ export default function CitizenGrievanceDetailPage() {
                     </Link>
                     <div className="h-4 w-px bg-outline-variant" />
                     <nav className="flex items-center gap-space-xs font-body-sm text-body-sm text-on-surface-variant">
-                      <Link to="/v2/citizen-dashboard" className="hover:text-secondary transition-colors">
+                      <Link to="/dashboard" className="hover:text-secondary transition-colors">
                         Dashboard
                       </Link>
                       <span>/</span>

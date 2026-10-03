@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 /**
- * CitizenRegistrationPage (v2)
+ * CitizenRegistrationPage
  * Converted faithfully from Stitch export: citizen_registration
  * 
  * Preserves exact layout, trust stature panel, interactive state simulator, and form elements.
@@ -60,7 +60,7 @@ export default function CitizenRegistrationPage() {
       });
 
       if (res.data.success) {
-        navigate('/v2/citizen-login');
+        navigate('/citizen-login');
       } else {
         setApiError(res.data.message || 'Registration failed.');
       }
@@ -114,22 +114,22 @@ export default function CitizenRegistrationPage() {
             </div>
           </div>
           <nav className="hidden md:flex items-center gap-space-lg">
-            <Link to="/v2/citizen-dashboard" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
+            <Link to="/dashboard" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
               Home
             </Link>
-            <Link to="/v2/public-tracking" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
+            <Link to="/track" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
               Public Tracking
             </Link>
-            <Link to="/v2/citizen-login" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
+            <Link to="/citizen-login" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
               Citizen Login
             </Link>
-            <Link to="/v2/gro-login" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
+            <Link to="/gro-login" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
               GRO Login
             </Link>
           </nav>
           <div className="flex items-center gap-space-md">
             <Link
-              to="/v2/submit-grievance"
+              to="/submit"
               className="inline-flex items-center justify-center px-space-md py-space-sm rounded-lg bg-secondary text-on-secondary font-label-lg text-label-lg hover:bg-secondary-container transition-colors shadow-sm"
             >
               Register Grievance
@@ -509,7 +509,7 @@ export default function CitizenRegistrationPage() {
                       {/* Secondary Navigation Link back to Login */}
                       <div className="text-center pt-space-xs">
                         <Link
-                          to="/v2/citizen-login"
+                          to="/citizen-login"
                           className="inline-flex items-center gap-1 font-label-lg text-label-lg text-secondary hover:text-secondary-container transition-colors py-1"
                         >
                           <span>Already have an account? Sign in to Citizen Portal</span>

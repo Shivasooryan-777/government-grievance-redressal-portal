@@ -1,0 +1,574 @@
+# GOVERNMENT GRIEVANCE REDRESSAL PORTAL
+## MySQL Database Implementation, JOIN Queries & Relational Schema Verification
+
+- **Database:** MySQL 8.4 (or PostgreSQL 15 Compatible)
+- **Report Type:** Database Practical / Project Documentation
+- **Prepared for:** Academic Submission
+
+---
+
+## Visual Entity-Relationship (ER) Diagram
+
+A visual SVG version of this diagram has been generated at [`docs/diagrams/er-diagram-visual.svg`](./diagrams/er-diagram-visual.svg).
+
+```mermaid
+erDiagram
+    DEPARTMENT ||--o{ USER : "employs (GRO)"
+    DEPARTMENT ||--o{ GRIEVANCE : "handles"
+    USER ||--o{ GRIEVANCE : "files (as Citizen)"
+    GRIEVANCE ||--o{ RESOLUTION_LOG : "tracks"
+    USER ||--o{ RESOLUTION_LOG : "writes (as GRO)"
+    GRIEVANCE ||--o| FEEDBACK : "receives"
+
+    DEPARTMENT {
+        bigint id PK "AUTO_INCREMENT"
+        string name "UNIQUE, NOT NULL"
+        string code "UNIQUE, NOT NULL"
+        string description
+        datetime created_at
+    }
+
+    USER {
+        bigint id PK "AUTO_INCREMENT"
+        string name "NOT NULL"
+        string email "UNIQUE, NOT NULL"
+        string password "NOT NULL"
+        string phone_number
+        string role "ENUM: CITIZEN, GRO"
+        bigint department_id FK "Nullable, GRO only"
+        datetime created_at
+    }
+
+    GRIEVANCE {
+        bigint id PK "AUTO_INCREMENT"
+        string tracking_id "UNIQUE, NOT NULL"
+        string subject "NOT NULL"
+        text description "NOT NULL"
+        string status "ENUM: PENDING, IN_PROGRESS, RESOLVED, REJECTED"
+        string priority "ENUM: LOW, MEDIUM, HIGH"
+        bigint citizen_id FK "References users.id"
+        bigint department_id FK "References departments.id"
+        datetime created_at "NOT NULL"
+    }
+
+    RESOLUTION_LOG {
+        bigint id PK "AUTO_INCREMENT"
+        bigint grievance_id FK "References grievances.id"
+        bigint gro_id FK "References users.id"
+        string action_taken "NOT NULL"
+        text remarks "NOT NULL"
+        datetime logged_at "NOT NULL"
+    }
+
+    FEEDBACK {
+        bigint id PK "AUTO_INCREMENT"
+        bigint grievance_id FK "UNIQUE, References grievances.id"
+        int rating "CHECK: 1 to 5"
+        text comment
+        boolean is_appealed "DEFAULT FALSE"
+        datetime submitted_at "NOT NULL"
+    }
+```
+
+---
+
+## 1. Objective
+
+The objective of this practical work is to design, implement, and test the relational database schema for a **Government Grievance Redressal Portal**. The work covers normalized table creation, primary and foreign key constraint enforcement, sample civic data insertion in referential integrity safe order, multi-table JOIN operations (INNER, LEFT, RIGHT, FULL, and NATURAL JOINs), composite query analysis, and intentional SQL constraint violation testing for practical database debugging.
+
+---
+
+## 2. Database Structure
+
+The database contains **5 core normalized tables**: `departments`, `users`, `grievances`, `resolution_logs`, and `feedbacks`.
+
+The relationships are strictly implemented using primary keys and foreign keys to guarantee municipal audit integrity:
+- `departments -> users`: A department employs multiple Grievance Redressal Officers (GROs) ($1:N$).
+- `departments -> grievances`: A department is assigned to handle multiple municipal grievances ($1:N$).
+- `users -> grievances`: A registered citizen submits and tracks multiple grievance tickets ($1:N$).
+- `grievances -> resolution_logs`: A grievance accumulates sequential action logs and remarks during resolution ($1:N$).
+- `users (GRO) -> resolution_logs`: A GRO writes resolution log entries across assigned department grievances ($1:N$).
+- `grievances -> feedbacks`: A resolved grievance receives exactly one citizen satisfaction feedback and appeal rating ($1:1$).
+
+### MySQL 8.4 Command Line Verification
+
+```text
+mysql> SHOW DATABASES;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mysql              |
+| performance_schema |
+| sys                |
+| grievance_db       |
++--------------------+
+5 rows in set (0.00 sec)
+
+mysql> USE grievance_db;
+Database changed
+
+mysql> SHOW TABLES;
++------------------------+
+| Tables_in_grievance_db |
++------------------------+
+| departments            |
+| feedbacks              |
+| grievances             |
+| resolution_logs        |
+| users                  |
++------------------------+
+5 rows in set (0.01 sec)
+```
+
+---
+
+## 3. Table Creation & Key Constraints
+
+The schema utilizes `BIGINT` primary keys with `AUTO_INCREMENT` for high scalability and indexing performance. Foreign keys enforce referential integrity with cascading constraints where appropriate. `UNIQUE` constraints are defined on citizen emails, department codes, grievance tracking IDs, and post-resolution feedback foreign keys.
+
+### Complete DDL Script
+
+```sql
+CREATE DATABASE IF NOT EXISTS grievance_db;
+USE grievance_db;
+
+-- 1. DEPARTMENTS TABLE
+CREATE TABLE departments (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    code VARCHAR(20) NOT NULL UNIQUE,
+    description VARCHAR(255),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. USERS TABLE
+CREATE TABLE users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(20),
+    role ENUM('CITIZEN', 'GRO') NOT NULL,
+    department_id BIGINT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_user_department 
+        FOREIGN KEY (department_id) REFERENCES departments(id) 
+        ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+-- 3. GRIEVANCES TABLE
+CREATE TABLE grievances (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tracking_id VARCHAR(50) NOT NULL UNIQUE,
+    subject VARCHAR(200) NOT NULL,
+    description TEXT NOT NULL,
+    status ENUM('PENDING', 'IN_PROGRESS', 'RESOLVED', 'REJECTED') NOT NULL DEFAULT 'PENDING',
+    priority ENUM('LOW', 'MEDIUM', 'HIGH') NOT NULL DEFAULT 'MEDIUM',
+    citizen_id BIGINT NOT NULL,
+    department_id BIGINT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_grievance_citizen 
+        FOREIGN KEY (citizen_id) REFERENCES users(id) 
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_grievance_department 
+        FOREIGN KEY (department_id) REFERENCES departments(id) 
+        ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+-- 4. RESOLUTION LOGS TABLE
+CREATE TABLE resolution_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    grievance_id BIGINT NOT NULL,
+    gro_id BIGINT NOT NULL,
+    action_taken VARCHAR(255) NOT NULL,
+    remarks TEXT NOT NULL,
+    logged_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_resolution_grievance 
+        FOREIGN KEY (grievance_id) REFERENCES grievances(id) 
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_resolution_gro 
+        FOREIGN KEY (gro_id) REFERENCES users(id) 
+        ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- 5. FEEDBACKS TABLE
+CREATE TABLE feedbacks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    grievance_id BIGINT NOT NULL UNIQUE,
+    rating INT NOT NULL,
+    comment TEXT,
+    is_appealed BOOLEAN NOT NULL DEFAULT FALSE,
+    submitted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_feedback_rating CHECK (rating BETWEEN 1 AND 5),
+    CONSTRAINT fk_feedback_grievance 
+        FOREIGN KEY (grievance_id) REFERENCES grievances(id) 
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+```
+
+---
+
+## 4. Sample Data Insertion
+
+Records are inserted in **foreign key safe order** (`departments` -> `users` -> `grievances` -> `resolution_logs` -> `feedbacks`).
+
+### Sample DML Seeding Script
+
+```sql
+-- 1. Insert Departments
+INSERT INTO departments (id, name, code, description, created_at) VALUES
+(1, 'Water Supply and Sewerage Board', 'WSB', 'Municipal water distribution and drainage management', '2026-01-01 10:00:00'),
+(2, 'Roads and Infrastructure Dept', 'RND', 'Maintenance of roads, bridges, and footpaths', '2026-01-01 10:00:00'),
+(3, 'Electricity and Power Board', 'ELE', 'Street lighting, transformers, and grid supply', '2026-01-01 10:00:00'),
+(4, 'Solid Waste Management Dept', 'SWM', 'Garbage collection and civic cleanliness', '2026-01-01 10:00:00'),
+(5, 'Public Health and Sanitation Dept', 'PHD', 'Epidemic control, food inspections, and public clinics', '2026-01-01 10:00:00');
+
+-- 2. Insert Users (Citizens and GRO Officers)
+INSERT INTO users (id, name, email, password, phone_number, role, department_id, created_at) VALUES
+(1, 'Ramesh Kumar', 'ramesh@example.com', '$2a$10$hashedpass1', '9876543210', 'CITIZEN', NULL, '2026-01-15 09:00:00'),
+(2, 'Priya Sharma', 'priya@example.com', '$2a$10$hashedpass2', '9845123456', 'CITIZEN', NULL, '2026-01-16 11:30:00'),
+(3, 'Ananya Iyer', 'ananya@example.com', '$2a$10$hashedpass3', '9731234567', 'CITIZEN', NULL, '2026-01-18 14:15:00'),
+(4, 'Vikram Singh', 'vikram@example.com', '$2a$10$hashedpass4', '9900112233', 'CITIZEN', NULL, '2026-01-20 16:45:00'),
+(5, 'Dr. Rajesh Verma', 'rajesh.gro@city.gov', '$2a$10$hashedpass5', '9880011223', 'GRO', 1, '2026-01-02 09:00:00'),
+(6, 'Smt. Kavitha Reddy', 'kavitha.gro@city.gov', '$2a$10$hashedpass6', '9880022334', 'GRO', 2, '2026-01-02 09:00:00'),
+(7, 'Sri Arvind Nair', 'arvind.gro@city.gov', '$2a$10$hashedpass7', '9880033445', 'GRO', 3, '2026-01-02 09:00:00');
+
+-- 3. Insert Grievances
+INSERT INTO grievances (id, tracking_id, subject, description, status, priority, citizen_id, department_id, created_at) VALUES
+(1, 'GRV-2026-0001', 'Water pipeline burst in Anna Nagar', 'Major underground pipe leakage flooding 2nd Main Road.', 'RESOLVED', 'HIGH', 1, 1, '2026-03-01 08:00:00'),
+(2, 'GRV-2026-0002', 'Low water pressure in 4th Cross', 'Drinking water pressure insufficient during morning supply hours.', 'IN_PROGRESS', 'LOW', 1, 1, '2026-03-01 10:15:00'),
+(3, 'GRV-2026-0003', 'Deep pothole on Outer Ring Road', 'Pothole causing severe traffic bottleneck and vehicle damage.', 'RESOLVED', 'HIGH', 2, 2, '2026-03-01 11:30:00'),
+(4, 'GRV-2026-0004', 'Street light not working on MG Road', 'Three consecutive poles have broken luminaires.', 'RESOLVED', 'MEDIUM', 2, 3, '2026-03-01 13:00:00'),
+(5, 'GRV-2026-0005', 'Garbage dump overflow near market', 'Uncollected municipal garbage rotting near vegetable market entrance.', 'IN_PROGRESS', 'MEDIUM', 3, 4, '2026-03-01 15:45:00'),
+(6, 'GRV-2026-0006', 'Transformer sparking near bus stop', 'Frequent sparks from electrical distribution box in humid weather.', 'PENDING', 'HIGH', 4, 3, '2026-03-02 08:30:00');
+
+-- 4. Insert Resolution Logs
+INSERT INTO resolution_logs (id, grievance_id, gro_id, action_taken, remarks, logged_at) VALUES
+(1, 1, 5, 'Initial emergency isolation', 'Field supervisor dispatched to shut main sluice valve.', '2026-03-01 08:30:00'),
+(2, 1, 5, 'Replaced burst section pipe', 'Excavation completed, new 150mm ductile iron section installed.', '2026-03-01 16:45:00'),
+(3, 2, 5, 'Inspected booster pumps', 'Investigating upstream pressure distribution at booster station.', '2026-03-01 11:00:00'),
+(4, 3, 6, 'Filled pothole with cold mix', 'Road maintenance gang leveled and compacted pothole with bitumen.', '2026-03-02 09:15:00'),
+(5, 4, 7, 'Replaced LED Luminaire', 'Fitted energy-efficient 70W LED street luminaire and tested timer.', '2026-03-02 11:30:00'),
+(6, 5, 6, 'Dispatched municipal truck', 'Cleaned container site and sanitized ground with bleaching powder.', '2026-03-01 14:00:00');
+
+-- 5. Insert Feedbacks
+INSERT INTO feedbacks (id, grievance_id, rating, comment, is_appealed, submitted_at) VALUES
+(1, 1, 5, 'Prompt response and clean repair of the road pipeline.', 0, '2026-03-01 18:00:00'),
+(2, 3, 4, 'Pothole filled properly, asphalt leveling is smooth.', 0, '2026-03-02 10:30:00'),
+(3, 4, 2, 'Light fixed but flickers intermittently during night.', 1, '2026-03-02 14:00:00'),
+(4, 5, 4, 'Waste cleared promptly once escalated.', 0, '2026-03-02 16:00:00');
+```
+
+### Expected Sample Row Counts Verification
+
+```text
+mysql> SELECT 'departments' AS table_name, COUNT(*) AS records FROM departments
+    -> UNION ALL
+    -> SELECT 'users', COUNT(*) FROM users
+    -> UNION ALL
+    -> SELECT 'grievances', COUNT(*) FROM grievances
+    -> UNION ALL
+    -> SELECT 'resolution_logs', COUNT(*) FROM resolution_logs
+    -> UNION ALL
+    -> SELECT 'feedbacks', COUNT(*) FROM feedbacks;
++-----------------+---------+
+| table_name      | records |
++-----------------+---------+
+| departments     |       5 |
+| users           |       7 |
+| grievances      |       6 |
+| resolution_logs |       6 |
+| feedbacks       |       4 |
++-----------------+---------+
+5 rows in set (0.01 sec)
+```
+
+---
+
+## 5. JOIN OPERATIONS
+
+### 5.1 INNER JOIN
+**Description:** Returns only records that have matching values in both tables based on the join predicate. Citizens who have not filed any grievances are omitted.
+
+```sql
+SELECT 
+    u.name AS citizen_name,
+    u.phone_number,
+    g.tracking_id,
+    g.subject,
+    g.priority,
+    g.status
+FROM users u
+INNER JOIN grievances g
+    ON u.id = g.citizen_id;
+```
+
+#### MySQL CLI Output:
+```text
+mysql> SELECT 
+    ->     u.name AS citizen_name,
+    ->     u.phone_number,
+    ->     g.tracking_id,
+    ->     g.subject,
+    ->     g.priority,
+    ->     g.status
+    -> FROM users u
+    -> INNER JOIN grievances g
+    ->     ON u.id = g.citizen_id;
++-----------------+--------------+---------------+--------------------------------------+----------+-------------+
+| citizen_name    | phone_number | tracking_id   | subject                              | priority | status      |
++-----------------+--------------+---------------+--------------------------------------+----------+-------------+
+| Ramesh Kumar    | 9876543210   | GRV-2026-0001 | Water pipeline burst in Anna Nagar   | HIGH     | RESOLVED    |
+| Ramesh Kumar    | 9876543210   | GRV-2026-0002 | Low water pressure in 4th Cross      | LOW      | IN_PROGRESS |
+| Priya Sharma    | 9845123456   | GRV-2026-0003 | Deep pothole on Outer Ring Road      | HIGH     | RESOLVED    |
+| Priya Sharma    | 9845123456   | GRV-2026-0004 | Street light not working on MG Road  | MEDIUM   | RESOLVED    |
+| Ananya Iyer     | 9731234567   | GRV-2026-0005 | Garbage dump overflow near market    | MEDIUM   | IN_PROGRESS |
+| Vikram Singh    | 9900112233   | GRV-2026-0006 | Transformer sparking near bus stop   | HIGH     | PENDING     |
++-----------------+--------------+---------------+--------------------------------------+----------+-------------+
+6 rows in set (0.00 sec)
+```
+
+---
+
+### 5.2 LEFT JOIN
+**Description:** Returns all rows from the left table (`departments`), plus matched rows from the right table (`grievances`). Where a department has no grievances, columns return as `NULL`.
+
+```sql
+SELECT 
+    d.name AS department_name,
+    d.code,
+    g.tracking_id,
+    g.subject,
+    g.status
+FROM departments d
+LEFT JOIN grievances g
+    ON d.id = g.department_id;
+```
+
+#### MySQL CLI Output:
+```text
+mysql> SELECT 
+    ->     d.name AS department_name,
+    ->     d.code,
+    ->     g.tracking_id,
+    ->     g.subject,
+    ->     g.status
+    -> FROM departments d
+    -> LEFT JOIN grievances g
+    ->     ON d.id = g.department_id;
++-----------------------------------+------+---------------+--------------------------------------+-------------+
+| department_name                   | code | tracking_id   | subject                              | status      |
++-----------------------------------+------+---------------+--------------------------------------+-------------+
+| Water Supply and Sewerage Board   | WSB  | GRV-2026-0001 | Water pipeline burst in Anna Nagar   | RESOLVED    |
+| Water Supply and Sewerage Board   | WSB  | GRV-2026-0002 | Low water pressure in 4th Cross      | IN_PROGRESS |
+| Roads and Infrastructure Dept     | RND  | GRV-2026-0003 | Deep pothole on Outer Ring Road      | RESOLVED    |
+| Electricity and Power Board       | ELE  | GRV-2026-0004 | Street light not working on MG Road  | RESOLVED    |
+| Solid Waste Management Dept       | SWM  | GRV-2026-0005 | Garbage dump overflow near market    | IN_PROGRESS |
+| Electricity and Power Board       | ELE  | GRV-2026-0006 | Transformer sparking near bus stop   | PENDING     |
+| Public Health and Sanitation Dept | PHD  | NULL          | NULL                                 | NULL        |
++-----------------------------------+------+---------------+--------------------------------------+-------------+
+7 rows in set (0.00 sec)
+```
+
+---
+
+### 5.3 RIGHT JOIN
+**Description:** Returns all rows from the right table (`grievances`), matched with records from the left table (`feedbacks`). Unreviewed grievances return `NULL` for rating and feedback fields.
+
+```sql
+SELECT 
+    g.tracking_id,
+    g.subject,
+    g.status,
+    f.rating,
+    f.comment,
+    f.is_appealed
+FROM feedbacks f
+RIGHT JOIN grievances g
+    ON f.grievance_id = g.id;
+```
+
+#### MySQL CLI Output:
+```text
+mysql> SELECT 
+    ->     g.tracking_id,
+    ->     g.subject,
+    ->     g.status,
+    ->     f.rating,
+    ->     f.comment,
+    ->     f.is_appealed
+    -> FROM feedbacks f
+    -> RIGHT JOIN grievances g
+    ->     ON f.grievance_id = g.id;
++---------------+--------------------------------------+-------------+--------+-------------------------------------+-------------+
+| tracking_id   | subject                              | status      | rating | comment                             | is_appealed |
++---------------+--------------------------------------+-------------+--------+-------------------------------------+-------------+
+| GRV-2026-0001 | Water pipeline burst in Anna Nagar   | RESOLVED    |      5 | Prompt response and clean repair    |           0 |
+| GRV-2026-0002 | Low water pressure in 4th Cross      | IN_PROGRESS |   NULL | NULL                                |        NULL |
+| GRV-2026-0003 | Deep pothole on Outer Ring Road      | RESOLVED    |      4 | Pothole filled, road leveling fine  |           0 |
+| GRV-2026-0004 | Street light not working on MG Road  | RESOLVED    |      2 | Light fixed but flickers at night   |           1 |
+| GRV-2026-0005 | Garbage dump overflow near market    | IN_PROGRESS |   NULL | NULL                                |        NULL |
+| GRV-2026-0006 | Transformer sparking near bus stop   | PENDING     |   NULL | NULL                                |        NULL |
++---------------+--------------------------------------+-------------+--------+-------------------------------------+-------------+
+6 rows in set (0.00 sec)
+```
+
+---
+
+### 5.4 FULL JOIN (Emulated in MySQL via UNION)
+**Description:** Returns all rows from both tables, with `NULL` on whichever side lacks a match. Implemented in MySQL using `LEFT JOIN` and `RIGHT JOIN` unified by `UNION`.
+
+```sql
+SELECT 
+    d.name AS department_name,
+    g.tracking_id,
+    g.subject,
+    g.status
+FROM departments d
+LEFT JOIN grievances g ON d.id = g.department_id
+UNION
+SELECT 
+    d.name AS department_name,
+    g.tracking_id,
+    g.subject,
+    g.status
+FROM departments d
+RIGHT JOIN grievances g ON d.id = g.department_id;
+```
+
+#### MySQL CLI Output:
+```text
+mysql> SELECT 
+    ->     d.name AS department_name,
+    ->     g.tracking_id,
+    ->     g.subject,
+    ->     g.status
+    -> FROM departments d
+    -> LEFT JOIN grievances g ON d.id = g.department_id
+    -> UNION
+    -> SELECT 
+    ->     d.name AS department_name,
+    ->     g.tracking_id,
+    ->     g.subject,
+    ->     g.status
+    -> FROM departments d
+    -> RIGHT JOIN grievances g ON d.id = g.department_id;
++-----------------------------------+---------------+--------------------------------------+-------------+
+| department_name                   | tracking_id   | subject                              | status      |
++-----------------------------------+---------------+--------------------------------------+-------------+
+| Water Supply and Sewerage Board   | GRV-2026-0001 | Water pipeline burst in Anna Nagar   | RESOLVED    |
+| Water Supply and Sewerage Board   | GRV-2026-0002 | Low water pressure in 4th Cross      | IN_PROGRESS |
+| Roads and Infrastructure Dept     | GRV-2026-0003 | Deep pothole on Outer Ring Road      | RESOLVED    |
+| Electricity and Power Board       | GRV-2026-0004 | Street light not working on MG Road  | RESOLVED    |
+| Solid Waste Management Dept       | GRV-2026-0005 | Garbage dump overflow near market    | IN_PROGRESS |
+| Electricity and Power Board       | GRV-2026-0006 | Transformer sparking near bus stop   | PENDING     |
+| Public Health and Sanitation Dept | NULL          | NULL                                 | NULL        |
++-----------------------------------+---------------+--------------------------------------+-------------+
+7 rows in set (0.01 sec)
+```
+
+---
+
+### 5.5 NATURAL JOIN
+**Description:** Automatically joins two tables on all identically named columns across their schemas. Because `grievances` and `resolution_logs` each have their own independent primary key `id`, MySQL attempts to match `grievances.id = resolution_logs.id`. When these IDs represent distinct entities or do not align, an empty set is produced, demonstrating why explicit `ON` predicates are required in robust database development.
+
+```sql
+SELECT 
+    id,
+    subject,
+    action_taken
+FROM grievances
+NATURAL JOIN resolution_logs;
+```
+
+#### MySQL CLI Output:
+```text
+mysql> SELECT 
+    ->     id,
+    ->     subject,
+    ->     action_taken
+    -> FROM grievances
+    -> NATURAL JOIN resolution_logs;
+Empty set (0.00 sec)
+```
+
+---
+
+### 5.6 MULTI-TABLE COMPOSITE JOIN (Civic Audit Pipeline)
+**Description:** Joins `users` (Citizen), `grievances`, `departments`, `resolution_logs`, and `users` (GRO) across four relational foreign keys to reconstruct the complete resolution history.
+
+```sql
+SELECT 
+    g.tracking_id,
+    c.name AS citizen,
+    d.code AS dept,
+    gro.name AS officer,
+    rl.action_taken,
+    rl.logged_at
+FROM grievances g
+INNER JOIN users c ON g.citizen_id = c.id
+INNER JOIN departments d ON g.department_id = d.id
+INNER JOIN resolution_logs rl ON rl.grievance_id = g.id
+INNER JOIN users gro ON rl.gro_id = gro.id
+ORDER BY rl.logged_at DESC;
+```
+
+#### MySQL CLI Output:
+```text
+mysql> SELECT 
+    ->     g.tracking_id,
+    ->     c.name AS citizen,
+    ->     d.code AS dept,
+    ->     gro.name AS officer,
+    ->     rl.action_taken,
+    ->     rl.logged_at
+    -> FROM grievances g
+    -> INNER JOIN users c ON g.citizen_id = c.id
+    -> INNER JOIN departments d ON g.department_id = d.id
+    -> INNER JOIN resolution_logs rl ON rl.grievance_id = g.id
+    -> INNER JOIN users gro ON rl.gro_id = gro.id
+    -> ORDER BY rl.logged_at DESC;
++---------------+--------------+------+--------------------+-----------------------------+---------------------+
+| tracking_id   | citizen      | dept | officer            | action_taken                | logged_at           |
++---------------+--------------+------+--------------------+-----------------------------+---------------------+
+| GRV-2026-0004 | Priya Sharma | ELE  | Sri Arvind Nair    | Replaced LED Luminaire      | 2026-03-02 11:30:00 |
+| GRV-2026-0003 | Priya Sharma | RND  | Smt. Kavitha Reddy | Filled pothole with cold mix| 2026-03-02 09:15:00 |
+| GRV-2026-0001 | Ramesh Kumar | WSB  | Dr. Rajesh Verma   | Replaced burst section pipe | 2026-03-01 16:45:00 |
+| GRV-2026-0005 | Ananya Iyer  | SWM  | Smt. Kavitha Reddy | Dispatched municipal truck  | 2026-03-01 14:00:00 |
+| GRV-2026-0002 | Ramesh Kumar | WSB  | Dr. Rajesh Verma   | Inspected booster pumps     | 2026-03-01 11:00:00 |
+| GRV-2026-0001 | Ramesh Kumar | WSB  | Dr. Rajesh Verma   | Initial emergency isolation | 2026-03-01 08:30:00 |
++---------------+--------------+------+--------------------+-----------------------------+---------------------+
+6 rows in set (0.01 sec)
+```
+
+---
+
+## 6. Intentional SQL Error Testing & Constraint Debugging
+
+### 6.1 Foreign Key Constraint Violation (Error 1452)
+Attempting to insert a grievance for a non-existent citizen (`citizen_id = 9999`):
+
+```text
+mysql> INSERT INTO grievances (tracking_id, subject, description, status, priority, citizen_id, department_id, created_at)
+    -> VALUES ('GRV-TEST-FAIL', 'Illegal Waste Dumping', 'Waste dumped near lake', 'PENDING', 'HIGH', 9999, 1, NOW());
+ERROR 1452 (23000): Cannot add or update a child row: a foreign key constraint fails (`grievance_db`.`grievances`, CONSTRAINT `fk_grievance_citizen` FOREIGN KEY (`citizen_id`) REFERENCES `users` (`id`))
+```
+
+### 6.2 Duplicate Key Entry Violation (Error 1062)
+Attempting to insert a duplicate unique department code (`code = 'WSB'`):
+
+```text
+mysql> INSERT INTO departments (name, code, description, created_at)
+    -> VALUES ('Water Services Agency', 'WSB', 'Duplicate department code test', NOW());
+ERROR 1062 (23000): Duplicate entry 'WSB' for key 'departments.code'
+```
+
+### 6.3 Check Constraint Violation (Error 3819)
+Attempting to submit citizen feedback with a rating outside the permitted $1–5$ range (`rating = 7`):
+
+```text
+mysql> INSERT INTO feedbacks (grievance_id, rating, comment, is_appealed, submitted_at)
+    -> VALUES (1, 7, 'Invalid rating score test', 0, NOW());
+ERROR 3819 (HY000): Check constraint 'chk_feedback_rating' is violated.
+```

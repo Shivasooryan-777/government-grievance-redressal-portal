@@ -1,24 +1,28 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { useAuth } from './context/useAuth';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import CitizenDashboard from './pages/CitizenDashboard';
-import SubmitGrievance from './pages/SubmitGrievance';
-import GroDashboard from './pages/GroDashboard'; // New import for Session 5
+
+// Application Pages (Promoted from Stitch Design System)
+import CitizenLoginPage from './pages/CitizenLoginPage';
+import CitizenRegistrationPage from './pages/CitizenRegistrationPage';
+import CitizenDashboardPage from './pages/CitizenDashboardPage';
+import SubmitNewGrievancePage from './pages/SubmitNewGrievancePage';
+import CitizenGrievanceDetailPage from './pages/CitizenGrievanceDetailPage';
+import GroOfficerLoginPage from './pages/GroOfficerLoginPage';
+import GroOfficerDashboardPage from './pages/GroOfficerDashboardPage';
+import GroTicketDetailPage from './pages/GroTicketDetailPage';
+import PublicTrackingStatusPage from './pages/PublicTrackingStatusPage';
 
 // Component to protect routes that require authentication and specific roles
 function ProtectedRoute({ children, allowedRoles }) {
-    // Note: Ensure your AuthContext provides a 'user' object that contains the 'role' property
     const { isAuthenticated, user } = useAuth(); 
 
     if (!isAuthenticated) {
-        return <Navigate to="/login" replace />;
+        return <Navigate to="/citizen-login" replace />;
     }
 
     // Role-Based Access Control (RBAC) check
     if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-        // If a user tries to access a route not meant for their role, redirect them to their correct dashboard
         if (user.role === 'GRO') {
             return <Navigate to="/gro-dashboard" replace />;
         }
@@ -33,7 +37,7 @@ function SmartRedirect() {
     const { isAuthenticated, user } = useAuth();
     
     if (!isAuthenticated) {
-        return <Navigate to="/login" replace />;
+        return <Navigate to="/citizen-login" replace />;
     }
 
     if (user?.role === 'GRO') {
@@ -48,34 +52,48 @@ function SmartRedirect() {
 function AppRoutes() {
     return (
         <Routes>
-            {/* Public Routes */}
-            <Route path="/login" element={<Navigate to="/citizen-login" replace />} />
-            <Route path="/citizen-login" element={<Login expectedRole="CITIZEN" />} />
-            <Route path="/gro-login" element={<Login expectedRole="GRO" />} />
-            <Route path="/register" element={<Register />} />
-            
-            {/* Smart Redirect for root path based on role */}
+            {/* Root smart redirect based on session & role */}
             <Route path="/" element={<SmartRedirect />} />
+
+            {/* Public Authentication & Registration Routes */}
+            <Route path="/citizen-login" element={<CitizenLoginPage />} />
+            <Route path="/register" element={<CitizenRegistrationPage />} />
+            <Route path="/gro-login" element={<GroOfficerLoginPage />} />
+
+            {/* Public Docket Tracking Route */}
+            <Route path="/track" element={<PublicTrackingStatusPage />} />
 
             {/* Citizen Protected Routes */}
             <Route path="/dashboard" element={
                 <ProtectedRoute allowedRoles={['CITIZEN']}>
-                    <CitizenDashboard />
+                    <CitizenDashboardPage />
                 </ProtectedRoute>
             } />
+
             <Route path="/submit" element={
                 <ProtectedRoute allowedRoles={['CITIZEN']}>
-                    <SubmitGrievance />
+                    <SubmitNewGrievancePage />
+                </ProtectedRoute>
+            } />
+
+            <Route path="/grievance-detail" element={
+                <ProtectedRoute allowedRoles={['CITIZEN']}>
+                    <CitizenGrievanceDetailPage />
                 </ProtectedRoute>
             } />
 
             {/* GRO Protected Routes */}
             <Route path="/gro-dashboard" element={
                 <ProtectedRoute allowedRoles={['GRO']}>
-                    <GroDashboard />
+                    <GroOfficerDashboardPage />
                 </ProtectedRoute>
             } />
-            
+            <Route path="/gro-ticket-detail" element={
+                <ProtectedRoute allowedRoles={['GRO']}>
+                    <GroTicketDetailPage />
+                </ProtectedRoute>
+            } />
+
             {/* Catch-all redirect for unknown/typo routes */}
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

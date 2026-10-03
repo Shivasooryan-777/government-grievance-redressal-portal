@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 
 /**
- * CitizenLoginPage (v2)
+ * CitizenLoginPage
  * Converted faithfully from Stitch export: citizen_login
  * 
  * Preserves exact visual structure, Tailwind classes, and styling tokens.
@@ -37,7 +37,7 @@ export default function CitizenLoginPage() {
         setIsLoading(false);
         return;
       }
-      navigate('/v2/citizen-dashboard');
+      navigate('/dashboard');
     } catch (err) {
       setIsError(true);
       setErrorMessage(err.response?.data?.message || 'Login failed.');
@@ -265,7 +265,7 @@ export default function CitizenLoginPage() {
                 {/* Registration Link */}
                 <div className="text-center">
                   <Link
-                    to="/v2/citizen-registration"
+                    to="/register"
                     className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-space-md rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface transition-colors font-label-lg text-label-lg"
                   >
                     <span className="material-symbols-outlined text-[18px] text-secondary">person_add</span>
@@ -295,7 +295,7 @@ export default function CitizenLoginPage() {
 
             {/* Quick Footer Metadata & Helpdesk Anchor */}
             <div className="mt-space-lg flex flex-wrap items-center justify-center gap-space-md text-on-surface-variant">
-              <Link to="/v2/public-tracking" className="font-body-sm text-body-sm hover:text-secondary flex items-center gap-1 transition-colors">
+              <Link to="/track" className="font-body-sm text-body-sm hover:text-secondary flex items-center gap-1 transition-colors">
                 <span className="material-symbols-outlined text-[16px]">track_changes</span>
                 <span>Public Tracking Lookup</span>
               </Link>

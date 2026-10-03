@@ -4,7 +4,7 @@ import api from '../services/api';
 import { useAuth } from '../context/useAuth';
 
 /**
- * GroTicketDetailPage (v2)
+ * GroTicketDetailPage
  * Converted faithfully from Stitch export: gro_ticket_detail_view
  * 
  * Features:
@@ -107,7 +107,7 @@ export default function GroTicketDetailPage() {
         setCountdown((prev) => {
           if (prev !== null && prev <= 1) {
             clearInterval(interval);
-            navigate('/v2/gro-dashboard');
+            navigate('/gro-dashboard');
             return 0;
           }
           return prev !== null ? prev - 1 : null;
@@ -151,7 +151,7 @@ export default function GroTicketDetailPage() {
 
   const handleLogout = () => {
     logout();
-    navigate('/v2/gro-login');
+    navigate('/gro-login');
   };
 
   const handleDeterminationSubmit = async (e) => {
@@ -216,21 +216,21 @@ export default function GroTicketDetailPage() {
           </div>
           <nav className="flex flex-col px-space-sm gap-space-xs">
             <Link
-              to="/v2/gro-dashboard"
+              to="/gro-dashboard"
               className="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-label-lg text-label-lg"
             >
               <span className="material-symbols-outlined text-xl">dashboard</span>
               <span>Dashboard</span>
             </Link>
             <Link
-              to="/v2/gro-ticket-detail"
+              to="/gro-ticket-detail"
               className="flex items-center gap-space-sm px-space-md py-space-sm transition-colors bg-surface-container text-secondary font-label-lg rounded-lg"
             >
               <span className="material-symbols-outlined text-xl">inbox</span>
               <span>Grievance Dossiers</span>
             </Link>
             <Link
-              to="/v2/public-tracking"
+              to="/track"
               className="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-label-lg text-label-lg"
             >
               <span className="material-symbols-outlined text-xl">track_changes</span>
@@ -297,11 +297,11 @@ export default function GroTicketDetailPage() {
             <div className="w-full flex flex-col md:flex-row md:items-center justify-between gap-space-sm mb-space-lg">
               <div className="flex flex-col gap-space-xs">
                 <nav className="flex items-center gap-space-xs text-on-surface-variant font-label-md text-label-md">
-                  <Link to="/v2/gro-dashboard" className="hover:text-secondary transition-colors">
+                  <Link to="/gro-dashboard" className="hover:text-secondary transition-colors">
                     GRO Console
                   </Link>
                   <span className="material-symbols-outlined text-xs">chevron_right</span>
-                  <Link to="/v2/gro-dashboard" className="hover:text-secondary transition-colors">
+                  <Link to="/gro-dashboard" className="hover:text-secondary transition-colors">
                     Active Queue
                   </Link>
                   <span className="material-symbols-outlined text-xs">chevron_right</span>
@@ -814,7 +814,7 @@ export default function GroTicketDetailPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => navigate('/v2/gro-dashboard')}
+                          onClick={() => navigate('/gro-dashboard')}
                           className="flex-1 py-3 px-space-md rounded-xl bg-secondary text-on-secondary font-label-md text-label-md font-bold transition-all text-center flex items-center justify-center gap-1 shadow-md hover:bg-on-secondary-fixed-variant"
                         >
                           <span>Return to Queue</span>
@@ -848,7 +848,7 @@ export default function GroTicketDetailPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => navigate('/v2/gro-dashboard')}
+                          onClick={() => navigate('/gro-dashboard')}
                           className="flex-1 py-3 rounded-xl bg-secondary text-on-secondary font-label-md font-bold hover:bg-on-secondary-fixed-variant transition-colors flex items-center justify-center gap-1"
                         >
                           <span>Back to Queue</span>
