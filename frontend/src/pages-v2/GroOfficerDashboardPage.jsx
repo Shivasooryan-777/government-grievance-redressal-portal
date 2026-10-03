@@ -1,92 +1,98 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import api from '../services/api';
+import { useAuth } from '../context/useAuth';
 
 /**
  * GroOfficerDashboardPage (v2)
  * Converted faithfully from Stitch export: gro_officer_dashboard
  * 
  * Features:
- * - Officer fixed sidebar with GRO identity credentials
+ * - Officer fixed sidebar with GRO identity credentials & auth state
  * - Top header with department indicator & officer profile
  * - Queue Environment Harness (Active Queue, Cleared Zero-State, Skeleton Pulse, Network Interruption)
  * - 4 Redressal Key KPI Cards (Active Queue, High Escalation, Avg Resolution Time, SLA Met Meter)
  * - Dossier Data Table prioritizing Appealed / Re-Opened tickets at the very top with distinctive visual alert badges
+ * - Full integration with real GET /api/gro/queue backend endpoint
  */
 export default function GroOfficerDashboardPage() {
   const navigate = useNavigate();
-  const [queueView, setQueueView] = useState('default'); // 'default' | 'empty' | 'loading' | 'error'
+  const { user, logout } = useAuth();
+
+  const [dockets, setDockets] = useState([]);
+  const [queueView, setQueueView] = useState('loading'); // 'default' | 'empty' | 'loading' | 'error'
+  const [errorMessage, setErrorMessage] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
 
-  // MOCK DATA - replaced with real API data in a later session
-  const mockDockets = [
-    {
-      id: 'GRV-A99104F2',
-      tag: 'Statutory Escalated',
-      isAppealed: true,
-      subject: 'Street lamp outage causing hazard at Elm St',
-      summary: 'Previous closure rejected by ward resident; unaddressed transformer spark hazard cited at 42 Elm crossing.',
-      department: 'Public Lighting',
-      ward: 'Ward 12 • Central Zone',
-      priority: 'HIGH',
-      status: 'IN_PROGRESS',
-      submittedDate: 'Sep 28, 2024',
-      slaNotice: 'Overdue (21d)',
-      isOverdue: true,
-      badgeText: '🔥 RE-OPENED VIA APPEAL',
-    },
-    {
-      id: 'GRV-B7A231C4',
-      tag: 'Statutory Filing',
-      isAppealed: false,
-      subject: 'Disrupted potable water supply on 4th Ward Main Blvd',
-      summary: 'Sub-surface pipeline burst impacting 220 apartment residences; emergency valve shut down initiated.',
-      department: 'Water Supply & Sewerage',
-      ward: 'Ward 4 • North Corridor',
-      priority: 'HIGH',
-      status: 'IN_PROGRESS',
-      submittedDate: 'Oct 14, 2024',
-      slaNotice: 'Day 4 of 7 SLA',
-      isOverdue: false,
-      badgeText: 'Standard Docket',
-    },
-    {
-      id: 'GRV-E10294J5',
-      tag: 'Citizen Direct App',
-      isAppealed: false,
-      subject: 'Massive pothole causing axle damage on arterial ring road',
-      summary: 'Severe structural asphalt cavitation between Km 14 and 16; commuter safety alert requested.',
-      department: 'Roads & Highways',
-      ward: 'Ward 9 • East Expressway',
-      priority: 'HIGH',
-      status: 'SUBMITTED',
-      submittedDate: 'Oct 17, 2024',
-      slaNotice: 'Day 1 of 5 SLA',
-      isOverdue: false,
-      badgeText: 'Pending Triage',
-    },
-    {
-      id: 'GRV-C45012B8',
-      tag: 'Field Portal Sync',
-      isAppealed: false,
-      subject: 'Uncollected solid waste dump near community kindergarten',
-      summary: 'Sanitation crew cleared area and installed twin refuse bins.',
-      department: 'Solid Waste Management',
-      ward: 'Ward 3 • South Zone',
-      priority: 'MEDIUM',
-      status: 'RESOLVED',
-      submittedDate: 'Sep 15, 2024',
-      slaNotice: 'Resolved in 2d',
-      isOverdue: false,
-      badgeText: 'Completed',
-    },
-  ];
+  const fetchQueue = async () => {
+    setQueueView('loading');
+    setErrorMessage('');
+    try {
+      const res = await api.get('/api/gro/queue');
+      if (res.data && res.data.success) {
+        const queue = res.data.data || [];
+        setDockets(queue);
+        if (queue.length === 0) {
+          setQueueView('empty');
+        } else {
+          setQueueView('default');
+        }
+      } else {
+        setErrorMessage(res.data?.message || 'Failed to retrieve departmental queue.');
+        setQueueView('error');
+      }
+    } catch (err) {
+      console.error('Failed to fetch GRO queue:', err);
+      setErrorMessage(
+        err.response?.data?.message ||
+        'Could not synchronize departmental queue with Central State Registry.'
+      );
+      setQueueView('error');
+    }
+  };
 
-  const filteredDockets = mockDockets.filter((d) =>
-    d.id.toLowerCase().includes(searchFilter.toLowerCase()) ||
-    d.subject.toLowerCase().includes(searchFilter.toLowerCase()) ||
-    d.department.toLowerCase().includes(searchFilter.toLowerCase()) ||
-    d.ward.toLowerCase().includes(searchFilter.toLowerCase())
-  );
+  useEffect(() => {
+    fetchQueue();
+  }, []);
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/v2/gro-login');
+  };
+
+  const activeCount = dockets.length;
+  const highOrAppealedCount = dockets.filter((d) => d.priority === 'HIGH' || d.isAppealed).length;
+
+  const filteredDockets = dockets.filter((d) => {
+    const q = searchFilter.toLowerCase();
+    const id = (d.trackingId || `GRV-${d.id}`).toLowerCase();
+    const subj = (d.subject || '').toLowerCase();
+    const dept = (d.departmentName || '').toLowerCase();
+    const desc = (d.description || '').toLowerCase();
+    return id.includes(q) || subj.includes(q) || dept.includes(q) || desc.includes(q);
+  });
+
+  // Sort appealed tickets and HIGH-priority tickets to the top
+  const sortedDockets = [...filteredDockets].sort((a, b) => {
+    if (a.isAppealed && !b.isAppealed) return -1;
+    if (!a.isAppealed && b.isAppealed) return 1;
+    const pOrder = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+    const pDiff = (pOrder[b.priority] || 0) - (pOrder[a.priority] || 0);
+    if (pDiff !== 0) return pDiff;
+    return 0;
+  });
+
+  const departmentName = dockets[0]?.departmentName || 'Public Works & Utilities';
 
   return (
     <div className="bg-background font-body-md text-on-surface antialiased min-h-screen">
@@ -136,7 +142,9 @@ export default function GroOfficerDashboardPage() {
             <span className="material-symbols-outlined text-secondary text-sm">verified_user</span>
             <div className="flex flex-col">
               <span className="font-label-sm text-label-sm text-on-surface font-semibold">National Portal ID</span>
-              <span className="font-code-tracking text-code-tracking text-on-surface-variant">GRO-DEPT-9042</span>
+              <span className="font-code-tracking text-code-tracking text-on-surface-variant">
+                {user?.userId ? `GRO-OFFICER-00${user.userId}` : 'GRO-DEPT-9042'}
+              </span>
             </div>
           </div>
         </div>
@@ -153,7 +161,7 @@ export default function GroOfficerDashboardPage() {
             </div>
             <div className="hidden sm:flex items-center gap-space-xs px-space-sm py-space-xs rounded-full bg-surface-container text-on-surface-variant">
               <span className="material-symbols-outlined text-xs">account_balance</span>
-              <span className="font-label-sm text-label-sm">Dept of Public Works & Utilities</span>
+              <span className="font-label-sm text-label-sm">{departmentName}</span>
             </div>
           </div>
           <div className="flex items-center gap-space-md">
@@ -172,17 +180,20 @@ export default function GroOfficerDashboardPage() {
                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuCWmIBB930N1Am58db7-V_wCzAHz1LK3DS6P914gr7D4ReOsRRag3KgRklywxQDogF9LWnbcHjASWpUQbLOMx8KdDS4tPJ8tjbGy24tFb4kysn5Cfgs6rYf-6hZx8tTejAzJNMFbLebEUJn6AXPGIsmMMN2eYV_OsyBVXhAMzGvuPj1FNNj1Fljw-9QBeEIpfqHTXQoz0TAZXVlwFkx6L6TeKKIFgLvttaiwbpe7MYMtpqIXHSTA9kF"
               />
               <div className="hidden md:flex flex-col">
-                <span className="font-label-lg text-label-lg text-on-surface leading-tight">Sarah Jenkins</span>
+                <span className="font-label-lg text-label-lg text-on-surface leading-tight">
+                  {user?.email ? user.email.split('@')[0] : 'Officer (GRO)'}
+                </span>
                 <span className="font-label-sm text-label-sm text-on-surface-variant">Officer Grade-I (GRO)</span>
               </div>
             </div>
-            <Link
-              to="/v2/gro-login"
+            <button
+              type="button"
+              onClick={handleLogout}
               className="inline-flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg border border-outline-variant hover:bg-error-container hover:text-on-error-container text-on-surface-variant font-label-md text-label-md transition-colors"
             >
               <span className="material-symbols-outlined text-base">logout</span>
               <span>Logout</span>
-            </Link>
+            </button>
           </div>
         </header>
 
@@ -212,7 +223,7 @@ export default function GroOfficerDashboardPage() {
                       : 'bg-surface-container-low text-on-surface-variant hover:text-on-surface'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-sm">checklist</span> Active Queue ({mockDockets.length})
+                  <span className="material-symbols-outlined text-sm">checklist</span> Active Queue ({dockets.length})
                 </button>
                 <button
                   type="button"
@@ -256,7 +267,7 @@ export default function GroOfficerDashboardPage() {
                 <div className="flex flex-col max-w-3xl">
                   <div className="inline-flex items-center gap-2 mb-2">
                     <span className="px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-code-tracking text-code-tracking uppercase">
-                      DESK // GRO-PUBLIC-WORKS
+                      DESK // {departmentName.toUpperCase()}
                     </span>
                     <span className="inline-flex items-center gap-1 font-label-sm text-label-sm text-secondary font-semibold">
                       <span className="w-2 h-2 rounded-full bg-secondary animate-ping" /> Live Statutory Dispatch
@@ -274,13 +285,14 @@ export default function GroOfficerDashboardPage() {
                 <div className="flex items-center gap-space-sm">
                   <div className="flex items-center bg-surface-container-lowest px-space-md py-space-sm rounded-xl shadow-sm gap-2">
                     <span className="material-symbols-outlined text-on-surface-variant text-lg">calendar_today</span>
-                    <span className="font-label-md text-label-md text-on-surface">Statutory Cycle: Q4-2024</span>
+                    <span className="font-label-md text-label-md text-on-surface">Statutory Cycle: Active Queue</span>
                   </div>
                   <button
                     type="button"
+                    onClick={fetchQueue}
                     className="flex items-center gap-1.5 bg-primary text-on-primary px-space-md py-space-sm rounded-xl font-label-lg text-label-lg shadow-sm hover:opacity-90 transition-opacity"
                   >
-                    <span className="material-symbols-outlined text-lg">download</span> Export Batch
+                    <span className="material-symbols-outlined text-lg">refresh</span> Refresh Queue
                   </button>
                 </div>
               </div>
@@ -294,7 +306,7 @@ export default function GroOfficerDashboardPage() {
                     <span className="material-symbols-outlined text-secondary text-2xl">pending_actions</span>
                   </div>
                   <div className="flex items-baseline gap-space-xs">
-                    <span className="font-display-hero text-display-hero text-on-surface">6</span>
+                    <span className="font-display-hero text-display-hero text-on-surface">{activeCount}</span>
                     <span className="font-label-lg text-label-lg text-on-surface-variant">dockets</span>
                   </div>
                   <div className="mt-space-md flex items-center gap-1 text-on-surface-variant font-body-sm text-body-sm">
@@ -312,7 +324,7 @@ export default function GroOfficerDashboardPage() {
                     <span className="material-symbols-outlined text-error text-2xl animate-bounce">priority_high</span>
                   </div>
                   <div className="flex items-baseline gap-space-xs">
-                    <span className="font-display-hero text-display-hero text-error">2</span>
+                    <span className="font-display-hero text-display-hero text-error">{highOrAppealedCount}</span>
                     <span className="font-label-lg text-label-lg text-error font-semibold">critical dockets</span>
                   </div>
                   <div className="mt-space-md flex items-center gap-1 text-error font-label-sm text-label-sm font-semibold">
@@ -330,12 +342,12 @@ export default function GroOfficerDashboardPage() {
                     <span className="material-symbols-outlined text-secondary text-2xl">timer</span>
                   </div>
                   <div className="flex items-baseline gap-space-xs">
-                    <span className="font-display-hero text-display-hero text-on-surface">3.2</span>
-                    <span className="font-label-lg text-label-lg text-on-surface-variant">days</span>
+                    <span className="font-headline-md text-headline-md text-on-surface-variant font-semibold">
+                      Not available
+                    </span>
                   </div>
                   <div className="mt-space-md flex items-center justify-between">
-                    <span className="font-body-sm text-body-sm text-on-surface-variant">Benchmark: ≤ 5.0 days</span>
-                    <span className="font-label-sm text-label-sm text-secondary font-bold">-0.8d vs last mo</span>
+                    <span className="font-body-sm text-body-sm text-outline">Active queue excludes resolved tickets</span>
                   </div>
                 </div>
 
@@ -347,30 +359,14 @@ export default function GroOfficerDashboardPage() {
                     </span>
                     <span className="material-symbols-outlined text-secondary text-2xl">verified</span>
                   </div>
-                  <div className="flex items-baseline justify-between">
-                    <span className="font-display-hero text-display-hero text-on-surface">98.4%</span>
-                    <svg className="w-10 h-10 -mr-1" viewBox="0 0 36 36">
-                      <path
-                        className="text-surface-container-high"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3.5"
-                      />
-                      <path
-                        className="text-secondary"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeDasharray="98.4, 100"
-                        strokeLinecap="round"
-                        strokeWidth="3.5"
-                      />
-                    </svg>
+                  <div className="flex items-baseline gap-space-xs">
+                    <span className="font-headline-md text-headline-md text-on-surface-variant font-semibold">
+                      Not available
+                    </span>
                   </div>
-                  <div className="mt-space-md flex items-center gap-1 text-on-surface-variant font-body-sm text-body-sm">
-                    <span className="material-symbols-outlined text-base text-secondary">check_circle</span>
-                    <span>Compliant under Public Act § 19</span>
+                  <div className="mt-space-md flex items-center gap-1 text-outline font-body-sm text-body-sm">
+                    <span className="material-symbols-outlined text-base text-outline">info</span>
+                    <span>Historical resolution data excluded from active queue</span>
                   </div>
                 </div>
               </div>
@@ -396,13 +392,15 @@ export default function GroOfficerDashboardPage() {
                   <span className="material-symbols-outlined text-3xl text-error">wifi_off</span>
                   <div>
                     <h4 className="font-title-md font-bold">Network Connection Interrupted</h4>
-                    <p className="font-body-sm mt-0.5">Could not synchronize departmental queue with Central State Registry.</p>
+                    <p className="font-body-sm mt-0.5">
+                      {errorMessage || 'Could not synchronize departmental queue with Central State Registry.'}
+                    </p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setQueueView('default')}
-                  className="px-space-md py-space-sm rounded-lg bg-on-error-container text-error-container font-label-md font-bold"
+                  onClick={fetchQueue}
+                  className="px-space-md py-space-sm rounded-lg bg-on-error-container text-error-container font-label-md font-bold hover:opacity-90 transition-opacity"
                 >
                   Retry Connection
                 </button>
@@ -423,10 +421,11 @@ export default function GroOfficerDashboardPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setQueueView('default')}
-                  className="px-space-lg py-space-sm rounded-lg bg-surface-container text-on-surface font-label-md font-semibold"
+                  onClick={fetchQueue}
+                  className="px-space-lg py-space-sm rounded-lg bg-surface-container text-on-surface font-label-md font-semibold hover:bg-surface-container-high transition-colors flex items-center gap-1"
                 >
-                  Return to Active Sample Data
+                  <span className="material-symbols-outlined text-base">refresh</span>
+                  <span>Refresh Queue</span>
                 </button>
               </div>
             )}
@@ -442,7 +441,7 @@ export default function GroOfficerDashboardPage() {
                       type="text"
                       value={searchFilter}
                       onChange={(e) => setSearchFilter(e.target.value)}
-                      placeholder="Filter by Docket ID, ward, or grievance subject..."
+                      placeholder="Filter by Docket ID, department, or grievance subject..."
                       className="bg-transparent border-0 outline-none w-full text-on-surface font-body-md text-body-md placeholder:text-outline"
                     />
                   </div>
@@ -462,7 +461,7 @@ export default function GroOfficerDashboardPage() {
                         <tr className="bg-surface-container-low text-on-surface-variant font-label-md text-label-md uppercase tracking-wider">
                           <th className="py-space-md px-space-lg w-44">Tracking ID</th>
                           <th className="py-space-md px-space-md min-w-[280px]">Subject & Civil Summary</th>
-                          <th className="py-space-md px-space-md w-52">Department / Ward</th>
+                          <th className="py-space-md px-space-md w-52">Department</th>
                           <th className="py-space-md px-space-md w-32">Priority</th>
                           <th className="py-space-md px-space-md w-36">Status</th>
                           <th className="py-space-md px-space-md w-32">Submitted</th>
@@ -471,10 +470,14 @@ export default function GroOfficerDashboardPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-surface-container font-body-md text-body-md">
-                        {filteredDockets.map((row) => (
+                        {sortedDockets.map((row) => (
                           <tr
-                            key={row.id}
-                            onClick={() => navigate('/v2/gro-ticket-detail')}
+                            key={row.id || row.trackingId}
+                            onClick={() =>
+                              navigate('/v2/gro-ticket-detail', {
+                                state: { grievanceId: row.id, trackingId: row.trackingId, grievance: row },
+                              })
+                            }
                             className={`transition-colors cursor-pointer group ${
                               row.isAppealed ? 'bg-error-container/30 hover:bg-error-container/50' : 'hover:bg-surface-container-low/70'
                             }`}
@@ -483,10 +486,10 @@ export default function GroOfficerDashboardPage() {
                               <div className="flex flex-col">
                                 <span className="font-code-tracking text-code-tracking font-bold text-on-surface flex items-center gap-1">
                                   {row.isAppealed && <span className="w-2 h-2 rounded-full bg-error animate-pulse" />}
-                                  {row.id}
+                                  {row.trackingId || `GRV-${row.id}`}
                                 </span>
                                 <span className={`font-label-sm text-label-sm font-semibold mt-0.5 ${row.isAppealed ? 'text-error' : 'text-on-surface-variant'}`}>
-                                  {row.tag}
+                                  {row.isAppealed ? 'Statutory Escalated' : 'Civil Intake'}
                                 </span>
                               </div>
                             </td>
@@ -503,14 +506,18 @@ export default function GroOfficerDashboardPage() {
                                   </span>
                                 </div>
                                 <p className="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">
-                                  {row.summary}
+                                  {row.description || 'No detailed citizen description provided.'}
                                 </p>
                               </div>
                             </td>
                             <td className="py-space-lg px-space-md">
                               <div className="flex flex-col">
-                                <span className="font-label-lg text-label-lg text-on-surface">{row.department}</span>
-                                <span className="font-body-sm text-body-sm text-on-surface-variant">{row.ward}</span>
+                                <span className="font-label-lg text-label-lg text-on-surface">
+                                  {row.departmentName || 'General Grievance Desk'}
+                                </span>
+                                <span className="font-body-sm text-body-sm text-on-surface-variant">
+                                  {row.isAppealed ? 'First Appellate Division' : 'Municipal Jurisdiction'}
+                                </span>
                               </div>
                             </td>
                             <td className="py-space-lg px-space-md">
@@ -518,7 +525,9 @@ export default function GroOfficerDashboardPage() {
                                 className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-label-sm text-label-sm font-bold ${
                                   row.priority === 'HIGH'
                                     ? 'bg-error-container text-error'
-                                    : 'bg-surface-container text-on-surface-variant'
+                                    : row.priority === 'MEDIUM'
+                                    ? 'bg-surface-container text-on-surface-variant'
+                                    : 'bg-surface-container-low text-outline'
                                 }`}
                               >
                                 {row.priority === 'HIGH' && <span className="material-symbols-outlined text-sm">priority_high</span>}
@@ -528,15 +537,15 @@ export default function GroOfficerDashboardPage() {
                             <td className="py-space-lg px-space-md">
                               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container text-secondary font-label-sm text-label-sm font-semibold">
                                 {row.status === 'IN_PROGRESS' && <span className="material-symbols-outlined text-sm animate-spin">refresh</span>}
-                                {row.status === 'RESOLVED' && <span className="material-symbols-outlined text-sm text-secondary">check</span>}
+                                {row.status === 'PENDING' && <span className="material-symbols-outlined text-sm text-outline">hourglass_empty</span>}
                                 {row.status}
                               </span>
                             </td>
                             <td className="py-space-lg px-space-md">
                               <div className="flex flex-col font-body-sm text-body-sm text-on-surface">
-                                <span>{row.submittedDate}</span>
-                                <span className={`font-label-sm text-label-sm font-semibold ${row.isOverdue ? 'text-error' : 'text-on-surface-variant'}`}>
-                                  {row.slaNotice}
+                                <span>{formatDate(row.createdAt)}</span>
+                                <span className={`font-label-sm text-label-sm font-semibold ${row.isAppealed ? 'text-error' : 'text-on-surface-variant'}`}>
+                                  {row.isAppealed ? 'Immediate Priority' : 'Standard SLA'}
                                 </span>
                               </div>
                             </td>
@@ -544,18 +553,24 @@ export default function GroOfficerDashboardPage() {
                               {row.isAppealed ? (
                                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-error text-on-error font-label-sm text-label-sm shadow-sm ring-4 ring-error/20 animate-pulse">
                                   <span className="text-sm font-bold">🔥</span>
-                                  <span className="tracking-wide uppercase font-extrabold">{row.badgeText}</span>
+                                  <span className="tracking-wide uppercase font-extrabold">RE-OPENED VIA APPEAL</span>
                                 </div>
                               ) : (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-low text-on-surface-variant font-label-sm text-label-sm">
                                   <span className="material-symbols-outlined text-xs text-outline">description</span>
-                                  {row.badgeText}
+                                  Standard Docket
                                 </span>
                               )}
                             </td>
                             <td className="py-space-lg px-space-lg text-right">
-                              <Link
-                                to="/v2/gro-ticket-detail"
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate('/v2/gro-ticket-detail', {
+                                    state: { grievanceId: row.id, trackingId: row.trackingId, grievance: row },
+                                  });
+                                }}
                                 className={`inline-flex items-center justify-end gap-1 px-space-md py-space-sm rounded-lg font-label-md text-label-md transition-all ${
                                   row.isAppealed
                                     ? 'bg-error text-on-error hover:opacity-95 shadow-sm'
@@ -564,7 +579,7 @@ export default function GroOfficerDashboardPage() {
                               >
                                 <span>Inspect Docket</span>
                                 <span className="material-symbols-outlined text-base">arrow_forward</span>
-                              </Link>
+                              </button>
                             </td>
                           </tr>
                         ))}

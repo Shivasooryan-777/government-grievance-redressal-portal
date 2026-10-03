@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import api from '../services/api';
+import { useAuth } from '../context/useAuth';
 
 /**
  * GroTicketDetailPage (v2)
@@ -7,49 +9,191 @@ import { Link } from 'react-router-dom';
  * 
  * Features:
  * - Breadcrumb & context navigation
- * - Prominent "REOPENED VIA STATUTORY APPEAL" banner with citizen statement & countdown timer
+ * - Prominent "REOPENED VIA STATUTORY APPEAL" banner with real citizen statement & appeal reason
  * - Full docket article (Subject, Description, Dept, Asset Tag)
- * - Chronological Resolution Audit Timeline with milestones #01, #02, #03
- * - Official Redressal Determination form with:
+ * - Chronological Resolution Audit Timeline with real resolutionLogs
+ * - Official Redressal Determination form with real PATCH /api/gro/grievances/{id}/status call:
  *   - Action taken input
  *   - Officer remarks textarea
  *   - Mandatory 3-way radio status update: In Progress | Resolved | Rejected
  *   - Evaluator State switcher (Form, Loading, Success, Error)
  */
 export default function GroTicketDetailPage() {
-  const [evaluatorState, setEvaluatorState] = useState('active'); // 'active' | 'loading' | 'success' | 'error'
-  const [actionTaken, setActionTaken] = useState(
-    'Emergency dispatch sent to replace luminaire on secondary pole L-43 and certify lux output.'
-  );
-  const [officerRemarks, setOfficerRemarks] = useState(
-    'Field team acknowledged secondary pole miscommunication. New high-output LED fixture installed today. Crosswalk lux survey verified above safety standard.'
-  );
-  const [selectedStatus, setSelectedStatus] = useState('resolved'); // 'in_progress' | 'resolved' | 'rejected'
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
-  // MOCK DATA - replaced with real API data in a later session
-  const mockDossier = {
-    id: 'GRV-A99104F2',
-    subject: 'Street lamp outage causing severe hazard at Elm St intersection',
-    statement:
-      'The dual sodium vapor streetlight cluster at Elm & 4th cross has been non-operational for over 8 calendar days. Vehicles turning onto Elm St have nearly hit pedestrian crossers twice this week.',
-    appealStatement:
-      'The primary intersection hazard remains unrectified because light pole L-43 was left without replacement bulb, leaving crosswalk dark. Requesting secondary supervisor review.',
-    department: 'Dept of Public Lighting & Energy',
-    location: 'Mast Pole L-42 & L-43 (Elm St)',
-    ward: 'Ward 14 • Cross-junction',
-    filedDate: 'Sep 28, 2024, 09:14 AM',
-    appealDate: 'Oct 03, 2024 • 04:32 PM',
+  const initialTicket = location.state?.grievance || null;
+  const targetGrievanceId =
+    location.state?.grievanceId || new URLSearchParams(location.search).get('id') || null;
+  const targetTrackingId =
+    location.state?.trackingId || new URLSearchParams(location.search).get('trackingId') || null;
+
+  const [ticket, setTicket] = useState(initialTicket);
+  const [evaluatorState, setEvaluatorState] = useState(initialTicket ? 'active' : 'loading'); // 'active' | 'loading' | 'success' | 'error'
+  const [errorMessage, setErrorMessage] = useState('');
+  const [updateError, setUpdateError] = useState('');
+  const [countdown, setCountdown] = useState(null);
+
+  // Form states
+  const [actionTaken, setActionTaken] = useState('');
+  const [officerRemarks, setOfficerRemarks] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('RESOLVED'); // 'IN_PROGRESS' | 'RESOLVED' | 'REJECTED'
+
+  const fetchTicketFromQueue = async () => {
+    if (!ticket) {
+      setEvaluatorState('loading');
+    }
+    setErrorMessage('');
+    try {
+      const res = await api.get('/api/gro/queue');
+      if (res.data && res.data.success) {
+        const list = res.data.data || [];
+        let matched = null;
+        if (targetGrievanceId) {
+          matched = list.find((g) => String(g.id) === String(targetGrievanceId));
+        }
+        if (!matched && targetTrackingId) {
+          matched = list.find(
+            (g) => (g.trackingId || '').toUpperCase() === targetTrackingId.toUpperCase()
+          );
+        }
+        if (!matched && initialTicket) {
+          matched = list.find(
+            (g) => g.id === initialTicket.id || g.trackingId === initialTicket.trackingId
+          );
+        }
+        if (!matched && list.length > 0) {
+          matched = list[0];
+        }
+
+        if (matched) {
+          setTicket(matched);
+          setEvaluatorState('active');
+        } else {
+          setErrorMessage(
+            'This ticket is not present in your active queue. Resolved or rejected tickets intentionally leave the active queue.'
+          );
+          setEvaluatorState('error');
+        }
+      } else {
+        setErrorMessage(res.data?.message || 'Failed to retrieve ticket from queue.');
+        setEvaluatorState('error');
+      }
+    } catch (err) {
+      console.error('Failed to load queue ticket:', err);
+      if (!ticket) {
+        setErrorMessage(
+          err.response?.data?.message ||
+          'Failed to retrieve ticket from departmental queue.'
+        );
+        setEvaluatorState('error');
+      }
+    }
   };
 
-  const handleDeterminationSubmit = (e) => {
-    e.preventDefault();
+  useEffect(() => {
+    if (!ticket) {
+      fetchTicketFromQueue();
+    }
+  }, [targetGrievanceId, targetTrackingId]);
+
+  // Handle auto-redirect countdown after successful update
+  useEffect(() => {
+    let interval;
+    if (evaluatorState === 'success') {
+      setCountdown(3);
+      interval = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev !== null && prev <= 1) {
+            clearInterval(interval);
+            navigate('/v2/gro-dashboard');
+            return 0;
+          }
+          return prev !== null ? prev - 1 : null;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [evaluatorState, navigate]);
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/v2/gro-login');
+  };
+
+  const handleDeterminationSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!ticket?.id) return;
+
+    setUpdateError('');
     setEvaluatorState('loading');
 
-    // MOCK DATA - replaced with real API data in a later session
-    setTimeout(() => {
-      setEvaluatorState('success');
-    }, 1200);
+    try {
+      const payload = {
+        status: selectedStatus,
+        remarks: officerRemarks.trim(),
+        actionTaken: actionTaken.trim(),
+      };
+
+      const res = await api.patch(`/api/gro/grievances/${ticket.id}/status`, payload);
+      if (res.data && res.data.success) {
+        setTicket(res.data.data);
+        setEvaluatorState('success');
+      } else {
+        setUpdateError(res.data?.message || 'Failed to update docket status.');
+        setEvaluatorState('error');
+      }
+    } catch (err) {
+      console.error('Failed to commit determination:', err);
+      setUpdateError(
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        'Unable to commit determination to central ledger. Network handshake timed out.'
+      );
+      setEvaluatorState('error');
+    }
   };
+
+  // Prepare chronological resolution log events
+  const logs = ticket?.resolutionLogs || [];
+  // Count total events: 1 intake + logs count + (isAppealed ? 1 : 0)
+  const totalEventsCount = 1 + logs.length + (ticket?.isAppealed ? 1 : 0);
+
+  const trackingIdDisplay = ticket?.trackingId || (ticket?.id ? `GRV-${ticket.id}` : 'DOCKET-INTAKE');
+  const departmentDisplay = ticket?.departmentName || 'Dept of Public Works & Utilities';
 
   return (
     <div className="bg-background font-body-md text-on-surface antialiased min-h-screen">
@@ -99,7 +243,9 @@ export default function GroTicketDetailPage() {
             <span className="material-symbols-outlined text-secondary text-sm">verified_user</span>
             <div className="flex flex-col">
               <span className="font-label-sm text-label-sm text-on-surface font-semibold">National Portal ID</span>
-              <span className="font-code-tracking text-code-tracking text-on-surface-variant">GRO-DEPT-9042</span>
+              <span className="font-code-tracking text-code-tracking text-on-surface-variant">
+                {user?.userId ? `GRO-OFFICER-00${user.userId}` : 'GRO-DEPT-9042'}
+              </span>
             </div>
           </div>
         </div>
@@ -116,7 +262,7 @@ export default function GroTicketDetailPage() {
             </div>
             <div className="hidden sm:flex items-center gap-space-xs px-space-sm py-space-xs rounded-full bg-surface-container text-on-surface-variant">
               <span className="material-symbols-outlined text-xs">account_balance</span>
-              <span className="font-label-sm text-label-sm">Dept of Public Works & Utilities</span>
+              <span className="font-label-sm text-label-sm">{departmentDisplay}</span>
             </div>
           </div>
           <div className="flex items-center gap-space-md">
@@ -127,17 +273,20 @@ export default function GroTicketDetailPage() {
                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuCWmIBB930N1Am58db7-V_wCzAHz1LK3DS6P914gr7D4ReOsRRag3KgRklywxQDogF9LWnbcHjASWpUQbLOMx8KdDS4tPJ8tjbGy24tFb4kysn5Cfgs6rYf-6hZx8tTejAzJNMFbLebEUJn6AXPGIsmMMN2eYV_OsyBVXhAMzGvuPj1FNNj1Fljw-9QBeEIpfqHTXQoz0TAZXVlwFkx6L6TeKKIFgLvttaiwbpe7MYMtpqIXHSTA9kF"
               />
               <div className="hidden md:flex flex-col">
-                <span className="font-label-lg text-label-lg text-on-surface leading-tight">Sarah Jenkins</span>
+                <span className="font-label-lg text-label-lg text-on-surface leading-tight">
+                  {user?.email ? user.email.split('@')[0] : 'Officer (GRO)'}
+                </span>
                 <span className="font-label-sm text-label-sm text-on-surface-variant">Officer Grade-I</span>
               </div>
             </div>
-            <Link
-              to="/v2/gro-login"
+            <button
+              type="button"
+              onClick={handleLogout}
               className="inline-flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg border border-outline-variant hover:bg-error-container hover:text-on-error-container text-on-surface-variant font-label-md text-label-md transition-colors"
             >
               <span className="material-symbols-outlined text-base">logout</span>
               <span>Logout</span>
-            </Link>
+            </button>
           </div>
         </header>
 
@@ -157,7 +306,7 @@ export default function GroTicketDetailPage() {
                   </Link>
                   <span className="material-symbols-outlined text-xs">chevron_right</span>
                   <span className="font-code-tracking text-code-tracking text-secondary font-semibold">
-                    {mockDossier.id}
+                    {trackingIdDisplay}
                   </span>
                 </nav>
                 <div className="flex items-center gap-space-sm">
@@ -165,7 +314,7 @@ export default function GroTicketDetailPage() {
                     Docket Dossier & Review
                   </span>
                   <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wider uppercase bg-surface-container text-secondary">
-                    Statutory Docket
+                    {ticket?.isAppealed ? 'Appellate Review' : 'Statutory Docket'}
                   </span>
                 </div>
               </div>
@@ -222,53 +371,60 @@ export default function GroTicketDetailPage() {
               </div>
             </div>
 
-            {/* Statutory Appeal Alert Banner */}
-            <section className="w-full bg-surface-container-highest rounded-xl p-space-md mb-space-lg shadow-sm relative overflow-hidden">
-              <div className="absolute -right-8 -bottom-8 w-44 h-44 bg-surface-container rounded-full blur-2xl pointer-events-none" />
-              <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-space-md relative z-10">
-                <div className="flex items-start gap-space-md">
-                  <div className="w-12 h-12 rounded-xl bg-error text-on-error flex items-center justify-center flex-shrink-0 shadow-md">
-                    <span className="material-symbols-outlined text-2xl">gavel</span>
+            {/* Statutory Appeal Alert Banner - Only displays when real isAppealed is true */}
+            {ticket?.isAppealed && (
+              <section className="w-full bg-surface-container-highest rounded-xl p-space-md mb-space-lg shadow-sm relative overflow-hidden">
+                <div className="absolute -right-8 -bottom-8 w-44 h-44 bg-surface-container rounded-full blur-2xl pointer-events-none" />
+                <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-space-md relative z-10">
+                  <div className="flex items-start gap-space-md">
+                    <div className="w-12 h-12 rounded-xl bg-error text-on-error flex items-center justify-center flex-shrink-0 shadow-md">
+                      <span className="material-symbols-outlined text-2xl">gavel</span>
+                    </div>
+                    <div className="flex flex-col gap-space-xs">
+                      <div className="flex flex-wrap items-center gap-space-sm">
+                        <span className="px-2 py-0.5 rounded-md bg-error-container text-on-error-container font-label-sm text-label-sm tracking-wider uppercase font-bold">
+                          REOPENED VIA STATUTORY APPEAL
+                        </span>
+                        <span className="font-code-tracking text-code-tracking text-on-surface-variant">
+                          Section 19(2) Civic Charter
+                        </span>
+                      </div>
+                      <p className="font-body-md text-body-md text-on-surface max-w-4xl font-medium">
+                        <span className="text-error font-semibold">Citizen Statement:</span> “
+                        {ticket.feedback?.appealReason || 'No reason provided'}
+                        ”
+                      </p>
+                      <div className="flex flex-wrap items-center gap-x-space-md gap-y-1 text-on-surface-variant font-label-sm text-label-sm pt-1">
+                        <span className="flex items-center gap-1">
+                          <span className="material-symbols-outlined text-xs text-error">calendar_today</span>
+                          Lodged: {formatDateTime(ticket.feedback?.submittedAt || ticket.createdAt)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="material-symbols-outlined text-xs text-error">assignment_return</span>
+                          Escalation Tier: GRO Oversight
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="material-symbols-outlined text-xs text-error">star</span>
+                          Citizen Prior Rating:{' '}
+                          <strong className="text-on-surface">
+                            {ticket.feedback?.rating ? `★ ${ticket.feedback.rating}/5 Stars` : 'Rating not submitted'}
+                          </strong>
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-space-xs">
-                    <div className="flex flex-wrap items-center gap-space-sm">
-                      <span className="px-2 py-0.5 rounded-md bg-error-container text-on-error-container font-label-sm text-label-sm tracking-wider uppercase font-bold">
-                        REOPENED VIA STATUTORY APPEAL
-                      </span>
-                      <span className="font-code-tracking text-code-tracking text-on-surface-variant">
-                        Section 19(2) Civic Charter
-                      </span>
-                    </div>
-                    <p className="font-body-md text-body-md text-on-surface max-w-4xl font-medium">
-                      <span className="text-error font-semibold">Citizen Statement:</span> “{mockDossier.appealStatement}”
-                    </p>
-                    <div className="flex flex-wrap items-center gap-x-space-md gap-y-1 text-on-surface-variant font-label-sm text-label-sm pt-1">
-                      <span className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-xs text-error">calendar_today</span>
-                        Lodged: {mockDossier.appealDate}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-xs text-error">assignment_return</span>
-                        Escalation Tier: GRO Oversight
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-xs text-error">star</span>
-                        Citizen Prior Rating: <strong className="text-on-surface">★ 2/5 Stars</strong>
-                      </span>
-                    </div>
+                  <div className="flex lg:flex-col items-center lg:items-end justify-between gap-space-xs flex-shrink-0 bg-surface-container-lowest/80 backdrop-blur-sm p-space-sm rounded-lg shadow-sm">
+                    <span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">
+                      Appeal Window SLA
+                    </span>
+                    <span className="font-headline-sm text-headline-sm text-error font-bold flex items-center gap-1">
+                      <span className="material-symbols-outlined text-lg">priority_high</span> HIGH PRIORITY
+                    </span>
+                    <span className="font-label-sm text-label-sm text-on-surface-variant">Expedite mandated</span>
                   </div>
                 </div>
-                <div className="flex lg:flex-col items-center lg:items-end justify-between gap-space-xs flex-shrink-0 bg-surface-container-lowest/80 backdrop-blur-sm p-space-sm rounded-lg shadow-sm">
-                  <span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">
-                    Appeal Window SLA
-                  </span>
-                  <span className="font-headline-sm text-headline-sm text-error font-bold flex items-center gap-1">
-                    <span className="material-symbols-outlined text-lg">timer</span> 18h 42m
-                  </span>
-                  <span className="font-label-sm text-label-sm text-on-surface-variant">Expedite mandated</span>
-                </div>
-              </div>
-            </section>
+              </section>
+            )}
 
             {/* Main Dual-Column Master-Detail */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
@@ -278,17 +434,31 @@ export default function GroTicketDetailPage() {
                   <div className="flex flex-wrap items-center justify-between gap-space-sm pb-space-sm">
                     <div className="flex items-center gap-space-sm">
                       <span className="font-code-tracking text-code-tracking bg-surface-container px-2.5 py-1 rounded-md text-secondary font-bold">
-                        {mockDossier.id}
+                        {trackingIdDisplay}
                       </span>
                       <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-secondary-container text-on-secondary-container flex items-center gap-1">
-                        <span className="material-symbols-outlined text-xs animate-spin">sync</span> In Progress
+                        {ticket?.status === 'IN_PROGRESS' && <span className="material-symbols-outlined text-xs animate-spin">sync</span>}
+                        {ticket?.status === 'PENDING' && <span className="material-symbols-outlined text-xs">hourglass_empty</span>}
+                        {ticket?.status === 'RESOLVED' && <span className="material-symbols-outlined text-xs">check_circle</span>}
+                        {ticket?.status === 'REJECTED' && <span className="material-symbols-outlined text-xs">cancel</span>}
+                        <span>{ticket?.status || 'IN_PROGRESS'}</span>
                       </span>
-                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-error text-on-error flex items-center gap-1">
-                        <span className="material-symbols-outlined text-xs">flag</span> High Priority
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${
+                          ticket?.priority === 'HIGH'
+                            ? 'bg-error text-on-error'
+                            : 'bg-surface-container text-on-surface-variant'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-xs">
+                          {ticket?.priority === 'HIGH' ? 'priority_high' : 'flag'}
+                        </span>
+                        <span>{ticket?.priority || 'MEDIUM'} Priority</span>
                       </span>
                     </div>
                     <span className="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">schedule</span> Filed: {mockDossier.filedDate}
+                      <span className="material-symbols-outlined text-sm">schedule</span> Filed:{' '}
+                      {formatDateTime(ticket?.createdAt)}
                     </span>
                   </div>
 
@@ -297,7 +467,7 @@ export default function GroTicketDetailPage() {
                       Incident Headline
                     </span>
                     <h2 className="font-headline-sm text-headline-sm text-on-surface font-bold leading-tight">
-                      {mockDossier.subject}
+                      {ticket?.subject || 'Grievance Dossier'}
                     </h2>
                   </div>
 
@@ -307,10 +477,12 @@ export default function GroTicketDetailPage() {
                       <span className="font-label-sm text-label-sm font-semibold text-secondary uppercase tracking-wider">
                         Citizen Testimonial & Grievance Context
                       </span>
-                      <span className="font-label-sm text-label-sm text-on-surface-variant">{mockDossier.ward}</span>
+                      <span className="font-label-sm text-label-sm text-on-surface-variant">
+                        {ticket?.departmentName || 'Civic Administration'}
+                      </span>
                     </div>
-                    <p className="font-body-md text-body-md text-on-surface leading-relaxed">
-                      {mockDossier.statement}
+                    <p className="font-body-md text-body-md text-on-surface leading-relaxed whitespace-pre-wrap">
+                      {ticket?.description || 'No detailed citizen description provided.'}
                     </p>
                   </div>
 
@@ -321,17 +493,17 @@ export default function GroTicketDetailPage() {
                         Designated Department
                       </span>
                       <span className="font-title-md text-title-md text-on-surface font-semibold flex items-center gap-1 mt-0.5">
-                        <span className="material-symbols-outlined text-base text-secondary">power</span>
-                        {mockDossier.department}
+                        <span className="material-symbols-outlined text-base text-secondary">domain</span>
+                        {departmentDisplay}
                       </span>
                     </div>
                     <div className="flex flex-col p-space-sm bg-surface-container-low rounded-lg">
                       <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">
-                        Geographic Asset Tag
+                        Jurisdiction Classification
                       </span>
                       <span className="font-title-md text-title-md text-on-surface font-semibold flex items-center gap-1 mt-0.5">
                         <span className="material-symbols-outlined text-base text-secondary">pin_drop</span>
-                        {mockDossier.location}
+                        {ticket?.isAppealed ? 'Appellate Redressal Zone' : 'Standard Municipal Ward'}
                       </span>
                     </div>
                   </div>
@@ -346,79 +518,92 @@ export default function GroTicketDetailPage() {
                         Resolution Timeline & Statutory Audit
                       </h3>
                     </div>
-                    <span className="font-code-tracking text-code-tracking text-on-surface-variant">3 Events Recorded</span>
+                    <span className="font-code-tracking text-code-tracking text-on-surface-variant">
+                      {totalEventsCount} {totalEventsCount === 1 ? 'Event' : 'Events'} Recorded
+                    </span>
                   </div>
 
                   <div className="relative pl-6 space-y-space-lg before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-surface-container-high">
-                    {/* Event 3: Appeal Reopening */}
-                    <div className="relative flex flex-col gap-1">
-                      <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-error ring-4 ring-error-container" />
-                      <div className="flex flex-wrap items-baseline justify-between gap-space-xs">
-                        <div className="flex items-center gap-space-xs">
-                          <span className="font-label-lg text-label-lg font-bold text-on-surface">
-                            Appeal Initiated & Case Reopened
-                          </span>
-                          <span className="px-2 py-0.2 rounded text-[10px] uppercase font-bold bg-error-container text-on-error-container">
-                            Milestone #03
-                          </span>
-                        </div>
-                        <span className="font-code-tracking text-code-tracking text-on-surface-variant">
-                          Oct 03, 2024 • 04:32 PM
-                        </span>
-                      </div>
-                      <p className="font-body-sm text-body-sm text-on-surface font-medium">
-                        Lodged by Citizen via Central Web Portal. Assigned directly to GRO Redressal Desk for secondary review.
-                      </p>
-                      <div className="text-xs text-on-surface-variant mt-1 p-2 bg-surface-container-low rounded">
-                        <span className="font-semibold text-on-surface">System Note:</span> Ticket transitioned from <em className="text-secondary font-semibold">Resolved</em> → <em className="text-error font-semibold">In Progress (Appealed)</em>.
-                      </div>
-                    </div>
-
-                    {/* Event 2: Initial Field Action */}
-                    <div className="relative flex flex-col gap-1">
-                      <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-secondary ring-4 ring-secondary-fixed" />
-                      <div className="flex flex-wrap items-baseline justify-between gap-space-xs">
-                        <div className="flex items-center gap-space-xs">
-                          <span className="font-label-lg text-label-lg font-bold text-on-surface">
-                            Field Workorder Executed & Closed
-                          </span>
-                          <span className="px-2 py-0.2 rounded text-[10px] uppercase font-bold bg-surface-container text-secondary">
-                            Milestone #02
+                    {/* Event: Appeal Reopening (If active appeal) */}
+                    {ticket?.isAppealed && (
+                      <div className="relative flex flex-col gap-1">
+                        <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-error ring-4 ring-error-container" />
+                        <div className="flex flex-wrap items-baseline justify-between gap-space-xs">
+                          <div className="flex items-center gap-space-xs">
+                            <span className="font-label-lg text-label-lg font-bold text-on-surface">
+                              Appeal Initiated & Case Reopened
+                            </span>
+                            <span className="px-2 py-0.2 rounded text-[10px] uppercase font-bold bg-error-container text-on-error-container">
+                              Milestone #{String(totalEventsCount).padStart(2, '0')}
+                            </span>
+                          </div>
+                          <span className="font-code-tracking text-code-tracking text-on-surface-variant">
+                            {formatDateTime(ticket.feedback?.submittedAt || ticket.createdAt)}
                           </span>
                         </div>
-                        <span className="font-code-tracking text-code-tracking text-on-surface-variant">
-                          Oct 01, 2024 • 02:15 PM
-                        </span>
+                        <p className="font-body-sm text-body-sm text-on-surface font-medium">
+                          Lodged by Citizen via Central Web Portal. Assigned directly to GRO Redressal Desk for secondary review.
+                        </p>
+                        <div className="text-xs text-on-surface-variant mt-1 p-2 bg-surface-container-low rounded">
+                          <span className="font-semibold text-on-surface">System Note:</span> Ticket transitioned from{' '}
+                          <em className="text-secondary font-semibold">Resolved</em> →{' '}
+                          <em className="text-error font-semibold">In Progress (Appealed)</em>.
+                        </div>
                       </div>
-                      <p className="font-body-sm text-body-sm text-on-surface">
-                        <strong>Officer:</strong> Marcus Vance (Lineman Supervisor, Zone 3)
-                      </p>
-                      <p className="font-body-sm text-body-sm text-on-surface-variant">
-                        <strong>Remarks:</strong> Replaced burned sodium ballast on mast pole L-42. Energized junction circuit and verified terminal voltage.
-                      </p>
-                    </div>
+                    )}
 
-                    {/* Event 1: Grievance Registration */}
+                    {/* Events: Real Resolution Logs in reverse-chronological order */}
+                    {[...logs].reverse().map((log, index) => {
+                      const milestoneNum = logs.length - index + 1;
+                      return (
+                        <div key={log.id || index} className="relative flex flex-col gap-1">
+                          <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-secondary ring-4 ring-secondary-fixed" />
+                          <div className="flex flex-wrap items-baseline justify-between gap-space-xs">
+                            <div className="flex items-center gap-space-xs">
+                              <span className="font-label-lg text-label-lg font-bold text-on-surface">
+                                {log.actionTaken || 'Supervisory Determination'}
+                              </span>
+                              <span className="px-2 py-0.2 rounded text-[10px] uppercase font-bold bg-surface-container text-secondary">
+                                Milestone #{String(milestoneNum).padStart(2, '0')}
+                              </span>
+                            </div>
+                            <span className="font-code-tracking text-code-tracking text-on-surface-variant">
+                              {formatDateTime(log.loggedAt)}
+                            </span>
+                          </div>
+                          <p className="font-body-sm text-body-sm text-on-surface">
+                            <strong>Officer:</strong> {log.groEmail || 'Grievance Redressal Officer'}
+                          </p>
+                          {log.remarks && (
+                            <p className="font-body-sm text-body-sm text-on-surface-variant">
+                              <strong>Remarks:</strong> {log.remarks}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Event 1: Initial Grievance Registration */}
                     <div className="relative flex flex-col gap-1">
                       <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-surface-container-highest ring-4 ring-surface-container" />
                       <div className="flex flex-wrap items-baseline justify-between gap-space-xs">
                         <div className="flex items-center gap-space-xs">
                           <span className="font-label-lg text-label-lg font-bold text-on-surface">
-                            Grievance Intake & Auto-Routing
+                            Grievance Registration & Auto-Routing
                           </span>
                           <span className="px-2 py-0.2 rounded text-[10px] uppercase font-bold bg-surface-container text-on-surface-variant">
                             Milestone #01
                           </span>
                         </div>
                         <span className="font-code-tracking text-code-tracking text-on-surface-variant">
-                          Sep 28, 2024 • 09:14 AM
+                          {formatDateTime(ticket?.createdAt)}
                         </span>
                       </div>
                       <p className="font-body-sm text-body-sm text-on-surface">
-                        <strong>Intake Channel:</strong> Mobile Redressal App (Verified Citizen ID #CTZ-88219)
+                        <strong>Intake Channel:</strong> Central Citizen Web Portal (Tracking #{trackingIdDisplay})
                       </p>
                       <p className="font-body-sm text-body-sm text-on-surface-variant">
-                        Auto-classified under Public Lighting Infrastructure, high accident risk threshold met.
+                        Auto-assigned to {departmentDisplay}. Initial priority set to {ticket?.priority || 'MEDIUM'}.
                       </p>
                     </div>
                   </div>
@@ -446,7 +631,7 @@ export default function GroTicketDetailPage() {
                       </div>
                       <p className="font-body-sm text-body-sm text-on-surface-variant">
                         Enter supervisory determination, field orders, and statutory verdict for Citizen Docket{' '}
-                        <strong className="text-on-surface font-mono">{mockDossier.id}</strong>.
+                        <strong className="text-on-surface font-mono">{trackingIdDisplay}</strong>.
                       </p>
 
                       <form className="flex flex-col gap-space-md" onSubmit={handleDeterminationSubmit}>
@@ -454,15 +639,16 @@ export default function GroTicketDetailPage() {
                         <div className="flex flex-col gap-space-xs">
                           <label className="font-label-lg text-label-lg text-on-surface flex items-center justify-between" htmlFor="action-taken">
                             <span>Action Taken</span>
-                            <span className="font-body-sm text-body-sm text-outline">Optional</span>
+                            <span className="font-body-sm text-body-sm text-outline">Optional (max 255)</span>
                           </label>
                           <input
                             id="action-taken"
                             name="action-taken"
                             type="text"
+                            maxLength={255}
                             value={actionTaken}
                             onChange={(e) => setActionTaken(e.target.value)}
-                            placeholder="e.g. Emergency dispatch sent to replace luminaire..."
+                            placeholder="e.g. Field inspection conducted; replacement part installed..."
                             className="w-full bg-surface-container-lowest text-on-surface placeholder:text-outline/70 px-space-md py-space-sm rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-secondary font-body-md text-body-md transition-all border border-surface-container-high"
                           />
                           <span className="font-body-sm text-body-sm text-outline">
@@ -474,15 +660,16 @@ export default function GroTicketDetailPage() {
                         <div className="flex flex-col gap-space-xs">
                           <label className="font-label-lg text-label-lg text-on-surface flex items-center justify-between" htmlFor="officer-remarks">
                             <span>Officer Remarks</span>
-                            <span className="font-body-sm text-body-sm text-outline">Optional</span>
+                            <span className="font-body-sm text-body-sm text-outline">Optional (max 2000)</span>
                           </label>
                           <textarea
                             id="officer-remarks"
                             name="officer-remarks"
                             rows={4}
+                            maxLength={2000}
                             value={officerRemarks}
                             onChange={(e) => setOfficerRemarks(e.target.value)}
-                            placeholder="e.g. Field team acknowledged secondary pole miscommunication..."
+                            placeholder="e.g. Detailed supervisory notes, technical observations, or citizen outcome summary..."
                             className="w-full bg-surface-container-lowest text-on-surface placeholder:text-outline/70 p-space-md rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-secondary font-body-md text-body-md transition-all resize-none border border-surface-container-high"
                           />
                           <span className="font-body-sm text-body-sm text-outline">
@@ -490,7 +677,7 @@ export default function GroTicketDetailPage() {
                           </span>
                         </div>
 
-                        {/* Required Status-Update Radio: In Progress | Resolved | Rejected */}
+                        {/* Required Status-Update Selection: In Progress | Resolved | Rejected */}
                         <div className="flex flex-col gap-space-xs pt-space-xs">
                           <label className="font-label-lg text-label-lg text-on-surface flex items-center justify-between">
                             <span>Update Docket Status <span className="text-error">*</span></span>
@@ -501,9 +688,9 @@ export default function GroTicketDetailPage() {
                           <div className="grid grid-cols-3 gap-2 bg-surface-container p-1 rounded-xl">
                             <button
                               type="button"
-                              onClick={() => setSelectedStatus('in_progress')}
+                              onClick={() => setSelectedStatus('IN_PROGRESS')}
                               className={`flex flex-col items-center py-3 px-2 rounded-lg text-center transition-all ${
-                                selectedStatus === 'in_progress'
+                                selectedStatus === 'IN_PROGRESS'
                                   ? 'bg-surface-container-lowest shadow-sm text-secondary font-semibold'
                                   : 'text-on-surface-variant hover:text-on-surface font-medium'
                               }`}
@@ -513,9 +700,9 @@ export default function GroTicketDetailPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setSelectedStatus('resolved')}
+                              onClick={() => setSelectedStatus('RESOLVED')}
                               className={`flex flex-col items-center py-3 px-2 rounded-lg text-center transition-all ${
-                                selectedStatus === 'resolved'
+                                selectedStatus === 'RESOLVED'
                                   ? 'bg-surface-container-lowest shadow-sm text-secondary font-semibold'
                                   : 'text-on-surface-variant hover:text-on-surface font-medium'
                               }`}
@@ -525,9 +712,9 @@ export default function GroTicketDetailPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setSelectedStatus('rejected')}
+                              onClick={() => setSelectedStatus('REJECTED')}
                               className={`flex flex-col items-center py-3 px-2 rounded-lg text-center transition-all ${
-                                selectedStatus === 'rejected'
+                                selectedStatus === 'REJECTED'
                                   ? 'bg-surface-container-lowest shadow-sm text-error font-semibold'
                                   : 'text-on-surface-variant hover:text-on-surface font-medium'
                               }`}
@@ -544,7 +731,7 @@ export default function GroTicketDetailPage() {
                             verified_user
                           </span>
                           <p className="font-body-sm text-body-sm">
-                            Determination will be digitally signed by <strong className="text-on-surface">Sarah Jenkins (GRO Grade-I)</strong> and broadcast via National SMS Gateway.
+                            Determination will be digitally signed by <strong className="text-on-surface">{user?.email || 'Authenticated Officer'}</strong> and committed to the statutory registry.
                           </p>
                         </div>
 
@@ -572,7 +759,7 @@ export default function GroTicketDetailPage() {
                           Committing Official Determination
                         </h4>
                         <p className="font-body-sm text-body-sm text-on-surface-variant">
-                          Appending signed resolution payload to Central Public Ledger & triggering SMS gateway...
+                          Appending signed resolution payload to Central Public Ledger & updating grievance state...
                         </p>
                       </div>
                     </div>
@@ -590,30 +777,33 @@ export default function GroTicketDetailPage() {
                             Status Updated Successfully!
                           </span>
                           <span className="font-title-md text-title-md font-bold text-on-surface">
-                            Docket {mockDossier.id} Marked as {selectedStatus.toUpperCase()}
+                            Docket {trackingIdDisplay} Marked as {selectedStatus}
                           </span>
                         </div>
                       </div>
                       <div className="p-space-md bg-surface-container-low rounded-xl flex flex-col gap-space-sm text-on-surface">
                         <div className="flex items-start gap-space-xs font-body-sm text-body-sm">
                           <span className="material-symbols-outlined text-secondary text-base flex-shrink-0 mt-0.5">history_edu</span>
-                          <span>Timeline entry <strong>#04</strong> appended to statutory record with GRO Grade-I cryptographic timestamp.</span>
+                          <span>Timeline entry appended to statutory record with GRO cryptographic timestamp.</span>
                         </div>
                         <div className="flex items-start gap-space-xs font-body-sm text-body-sm">
-                          <span className="material-symbols-outlined text-secondary text-base flex-shrink-0 mt-0.5">sms</span>
-                          <span>Notification SMS dispatched to citizen mobile <strong>+91 ••••• 8912</strong>.</span>
+                          <span className="material-symbols-outlined text-secondary text-base flex-shrink-0 mt-0.5">mark_email_read</span>
+                          <span>Notification and status transition dispatched to citizen.</span>
                         </div>
+                        {selectedStatus !== 'IN_PROGRESS' && (
+                          <div className="flex items-start gap-space-xs font-body-sm text-body-sm text-secondary font-medium">
+                            <span className="material-symbols-outlined text-secondary text-base flex-shrink-0 mt-0.5">check</span>
+                            <span>This ticket has now departed the active departmental queue.</span>
+                          </div>
+                        )}
                       </div>
-                      <div className="grid grid-cols-2 gap-space-sm text-center">
-                        <div className="p-space-sm bg-surface-container rounded-lg">
-                          <span className="font-label-sm text-label-sm text-outline uppercase">Total Turnaround</span>
-                          <div className="font-headline-sm text-headline-sm text-on-surface font-bold">5d 07h</div>
+
+                      {countdown !== null && (
+                        <div className="p-space-sm bg-surface-container-low rounded-lg text-center font-body-sm text-body-sm text-on-surface-variant">
+                          Returning to dashboard queue in <strong className="text-secondary">{countdown}s</strong>...
                         </div>
-                        <div className="p-space-sm bg-surface-container rounded-lg">
-                          <span className="font-label-sm text-label-sm text-outline uppercase">SLA Compliance</span>
-                          <div className="font-headline-sm text-headline-sm text-secondary font-bold">100% (Met)</div>
-                        </div>
-                      </div>
+                      )}
+
                       <div className="flex flex-col sm:flex-row gap-space-sm pt-space-xs">
                         <button
                           type="button"
@@ -622,13 +812,14 @@ export default function GroTicketDetailPage() {
                         >
                           Re-edit Determination
                         </button>
-                        <Link
-                          to="/v2/gro-dashboard"
-                          className="flex-1 py-3 px-space-md rounded-xl bg-secondary text-on-secondary font-label-md text-label-md font-bold transition-all text-center flex items-center justify-center gap-1"
+                        <button
+                          type="button"
+                          onClick={() => navigate('/v2/gro-dashboard')}
+                          className="flex-1 py-3 px-space-md rounded-xl bg-secondary text-on-secondary font-label-md text-label-md font-bold transition-all text-center flex items-center justify-center gap-1 shadow-md hover:bg-on-secondary-fixed-variant"
                         >
-                          <span>Back to Queue</span>
+                          <span>Return to Queue</span>
                           <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                        </Link>
+                        </button>
                       </div>
                     </div>
                   )}
@@ -638,22 +829,32 @@ export default function GroTicketDetailPage() {
                     <div className="flex flex-col gap-space-md">
                       <div className="p-space-md bg-error-container text-on-error-container rounded-xl flex items-start gap-space-sm">
                         <div className="w-10 h-10 rounded-full bg-error text-on-error flex items-center justify-center flex-shrink-0">
-                          <span className="material-symbols-outlined text-xl">wifi_off</span>
+                          <span className="material-symbols-outlined text-xl">error</span>
                         </div>
                         <div className="flex flex-col gap-0.5">
-                          <span className="font-label-lg text-label-lg font-bold">Transmission Failure</span>
+                          <span className="font-label-lg text-label-lg font-bold">Action Failed</span>
                           <p className="font-body-sm text-body-sm">
-                            Unable to commit determination to central ledger. Network handshake with National Grievance Node timed out.
+                            {updateError || errorMessage || 'Unable to commit determination to central ledger. Network handshake timed out.'}
                           </p>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setEvaluatorState('active')}
-                        className="w-full py-3 rounded-xl bg-surface-container text-on-surface font-label-md font-bold"
-                      >
-                        Retry Determination Input
-                      </button>
+                      <div className="flex flex-col sm:flex-row gap-space-sm">
+                        <button
+                          type="button"
+                          onClick={() => setEvaluatorState('active')}
+                          className="flex-1 py-3 rounded-xl bg-surface-container text-on-surface font-label-md font-bold hover:bg-surface-container-high transition-colors"
+                        >
+                          Retry Determination Input
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate('/v2/gro-dashboard')}
+                          className="flex-1 py-3 rounded-xl bg-secondary text-on-secondary font-label-md font-bold hover:bg-on-secondary-fixed-variant transition-colors flex items-center justify-center gap-1"
+                        >
+                          <span>Back to Queue</span>
+                          <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </section>
