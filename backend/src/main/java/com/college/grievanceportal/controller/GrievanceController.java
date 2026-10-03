@@ -17,15 +17,21 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * REST controller for citizen grievance lifecycle operations.
+ */
 @RestController
 @RequestMapping("/api/grievances")
 @RequiredArgsConstructor
+@Tag(name = "Grievances", description = "Endpoints for grievance submission, citizen grievance list, status tracking, and feedback")
 public class GrievanceController {
 
     private final GrievanceService grievanceService;
@@ -33,6 +39,10 @@ public class GrievanceController {
 
     @PostMapping
     @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(
+            summary = "Submit a new grievance",
+            description = "Creates a new citizen grievance under a specific department, auto-generates a unique tracking ID, and sets status to SUBMITTED. Restricted to CITIZEN role."
+    )
     public ResponseEntity<ApiResponse<GrievanceResponseDto>> submitGrievance(
             @Valid @RequestBody GrievanceRequestDto requestDto,
             Authentication authentication) {
@@ -50,6 +60,10 @@ public class GrievanceController {
 
     @GetMapping("/mine")
     @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(
+            summary = "Get grievances filed by authenticated citizen",
+            description = "Retrieves all grievances filed by the currently authenticated citizen with resolution logs and feedback. Restricted to CITIZEN role."
+    )
     public ResponseEntity<ApiResponse<List<GrievanceResponseDto>>> getMyGrievances(Authentication authentication) {
 
         User currentUser = getAuthenticatedUser(authentication);
@@ -71,6 +85,11 @@ public class GrievanceController {
      * @return public tracking response with non-sensitive status fields
      */
     @GetMapping("/track/{trackingId}")
+    @Operation(
+            summary = "Track grievance status publicly",
+            description = "Allows anyone with a valid tracking ID to view non-sensitive status, priority, and assigned department without authentication.",
+            security = {}
+    )
     public ResponseEntity<ApiResponse<GrievanceTrackingResponseDto>> trackGrievance(
             @PathVariable String trackingId) {
         GrievanceTrackingResponseDto response = grievanceService.trackGrievance(trackingId);
@@ -79,6 +98,10 @@ public class GrievanceController {
 
     @PostMapping("/{id}/feedback")
     @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(
+            summary = "Submit feedback for a resolved grievance",
+            description = "Submits a citizen rating (1-5) and remarks for a grievance in RESOLVED state. Restricted to the grievance owner."
+    )
     public ResponseEntity<ApiResponse<GrievanceResponseDto>> submitFeedback(
             @PathVariable Long id,
             @Valid @RequestBody FeedbackRequestDto requestDto,

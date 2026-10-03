@@ -43,6 +43,8 @@ public class GlobalExceptionHandler {
             }
         });
         
+        log.warn("Validation failed for request: {}", errors);
+
         ApiResponse<Map<String, String>> response = ApiResponse.<Map<String, String>>builder()
                 .success(false)
                 .message("Validation failed")
@@ -60,6 +62,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ApiResponse<Void>> handleBadCredentials(BadCredentialsException ex) {
+        log.warn("Authentication failed: Bad credentials provided");
         return new ResponseEntity<>(ApiResponse.error("Invalid email or password"), HttpStatus.UNAUTHORIZED);
     }
 
@@ -71,6 +74,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiResponse<Void>> handleAuthenticationException(AuthenticationException ex) {
+        log.warn("Authentication required or token invalid: {}", ex.getMessage());
         return new ResponseEntity<>(ApiResponse.error("Authentication is required"), HttpStatus.UNAUTHORIZED);
     }
 
@@ -85,6 +89,7 @@ public class GlobalExceptionHandler {
         String message = (ex.getMessage() != null && !ex.getMessage().isBlank())
                 ? ex.getMessage()
                 : "You are not authorized to perform this action";
+        log.warn("Access denied: {}", message);
         return new ResponseEntity<>(ApiResponse.error(message), HttpStatus.FORBIDDEN);
     }
 
@@ -108,6 +113,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        log.warn("Method argument type mismatch for parameter '{}': {}", ex.getName(), ex.getMessage());
         return new ResponseEntity<>(ApiResponse.error("Invalid parameter: " + ex.getName()), HttpStatus.BAD_REQUEST);
     }
 
@@ -119,6 +125,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("Business logic validation error: {}", ex.getMessage());
         return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.BAD_REQUEST);
     }
 
@@ -130,6 +137,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleResourceNotFound(ResourceNotFoundException ex) {
+        log.warn("Requested resource not found: {}", ex.getMessage());
         return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.NOT_FOUND);
     }
 
