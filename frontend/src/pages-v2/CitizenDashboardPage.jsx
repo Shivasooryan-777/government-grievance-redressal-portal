@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import api from '../services/api';
+import { useAuth } from '../context/useAuth';
 
 /**
  * CitizenDashboardPage (v2)
@@ -15,74 +17,85 @@ import { Link, useNavigate } from 'react-router-dom';
  */
 export default function CitizenDashboardPage() {
   const navigate = useNavigate();
-  const [activeState, setActiveState] = useState('default'); // 'default' | 'empty' | 'loading' | 'error'
+  const { user, logout } = useAuth();
+  const [activeState, setActiveState] = useState('loading'); // 'default' | 'empty' | 'loading' | 'error'
+  const [grievances, setGrievances] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // MOCK DATA - replaced with real API data in a later session
-  const mockGrievances = [
-    {
-      id: 'GRV-B7A231C4',
-      title: 'Disrupted potable water supply on 4th Ward Main Blvd',
-      desc: 'Main pipeline leakage leading to low pressure across sectors 8 to 14.',
-      department: 'Municipal Water Supply',
-      deptIcon: 'water_drop',
-      status: 'IN_PROGRESS',
-      statusLabel: 'In Progress',
-      priority: 'HIGH',
-      priorityLabel: 'High',
-      date: 'Oct 14, 2024',
-      appealBadge: 'Standard Docket',
-      isAppealed: false,
-    },
-    {
-      id: 'GRV-A99104F2',
-      title: 'Street lamp outage causing hazard at Elm St intersection',
-      desc: 'Citizen contested closure stating light bulb flickered off after 24 hrs.',
-      department: 'Dept of Public Lighting & Energy',
-      deptIcon: 'lightbulb',
-      status: 'RESOLVED',
-      statusLabel: 'Resolved',
-      priority: 'MEDIUM',
-      priorityLabel: 'Medium',
-      date: 'Sep 28, 2024',
-      appealBadge: '⚡ Appealed (Under Re-Review)',
-      isAppealed: true,
-    },
-    {
-      id: 'GRV-C45012B8',
-      title: 'Uncollected solid waste dump near community kindergarten',
-      desc: 'Sanitation crew cleared area and installed twin refuse bins.',
-      department: 'Sanitation & Solid Waste Directorate',
-      deptIcon: 'delete_sweep',
-      status: 'RESOLVED',
-      statusLabel: 'Resolved',
-      priority: 'HIGH',
-      priorityLabel: 'High',
-      date: 'Sep 15, 2024',
-      appealBadge: 'Feedback Submitted (★ 4/5)',
-      isAppealed: false,
-    },
-    {
-      id: 'GRV-D11984K0',
-      title: 'Overgrown roadside embankment blocking sightline',
-      desc: 'Wild vegetation restricting driver vision at North Spur bend.',
-      department: 'Roads & Highways Infrastructure',
-      deptIcon: 'edit_road',
-      status: 'SUBMITTED',
-      statusLabel: 'Pending',
-      priority: 'LOW',
-      priorityLabel: 'Low',
-      date: 'Oct 18, 2024',
-      appealBadge: 'Initial Triage',
-      isAppealed: false,
-    },
-  ];
+  const fetchGrievances = async () => {
+    setIsLoading(true);
+    setError(null);
+    setActiveState('loading');
+    try {
+      const res = await api.get('/api/grievances/mine');
+      if (res.data && res.data.success) {
+        const list = res.data.data || [];
+        setGrievances(list);
+        if (list.length === 0) {
+          setActiveState('empty');
+        } else {
+          setActiveState('default');
+        }
+      } else {
+        setError(res.data?.message || 'Failed to load grievances');
+        setActiveState('error');
+      }
+    } catch (err) {
+      console.error('Failed to fetch grievances:', err);
+      setError(
+        err.response?.data?.message ||
+        'Failed to load grievance records from the Central Grievance Monitoring Registry.'
+      );
+      setActiveState('error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const filteredGrievances = mockGrievances.filter((g) =>
-    g.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    g.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    g.department.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    fetchGrievances();
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/v2/citizen-login');
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const getDeptIcon = (deptName) => {
+    const name = (deptName || '').toLowerCase();
+    if (name.includes('water')) return 'water_drop';
+    if (name.includes('light') || name.includes('electric') || name.includes('power')) return 'lightbulb';
+    if (name.includes('road') || name.includes('highway')) return 'edit_road';
+    if (name.includes('waste') || name.includes('sanitation')) return 'delete_sweep';
+    if (name.includes('transport') || name.includes('traffic')) return 'directions_bus';
+    if (name.includes('park') || name.includes('forest')) return 'park';
+    return 'account_balance';
+  };
+
+  const totalFiled = grievances.length;
+  const inProgressCount = grievances.filter((g) => g.status === 'IN_PROGRESS').length;
+  const resolvedCount = grievances.filter((g) => g.status === 'RESOLVED').length;
+  const pendingCount = grievances.filter((g) => g.status === 'PENDING' || g.status === 'SUBMITTED').length;
+
+  const filteredGrievances = grievances.filter((g) => {
+    const q = searchQuery.toLowerCase();
+    const tId = (g.trackingId || '').toLowerCase();
+    const subj = (g.subject || '').toLowerCase();
+    const dept = (g.departmentName || '').toLowerCase();
+    return tId.includes(q) || subj.includes(q) || dept.includes(q);
+  });
 
   return (
     <div className="bg-background font-body-md text-on-surface antialiased min-h-screen">
@@ -132,7 +145,9 @@ export default function CitizenDashboardPage() {
             <span className="material-symbols-outlined text-secondary text-sm">verified_user</span>
             <div className="flex flex-col">
               <span className="font-label-sm text-label-sm text-on-surface font-semibold">Citizen ID Card</span>
-              <span className="font-code-tracking text-code-tracking text-on-surface-variant">UID-VNC-7821</span>
+              <span className="font-code-tracking text-code-tracking text-on-surface-variant">
+                {user?.userId ? `UID-CIT-00${user.userId}` : 'UID-VNC-7821'}
+              </span>
             </div>
           </div>
         </div>
@@ -168,17 +183,20 @@ export default function CitizenDashboardPage() {
                 src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
               />
               <div className="hidden md:flex flex-col">
-                <span className="font-label-lg text-label-lg text-on-surface leading-tight">Eleanor Vance</span>
+                <span className="font-label-lg text-label-lg text-on-surface leading-tight">
+                  {user?.email ? user.email.split('@')[0] : 'Citizen Resident'}
+                </span>
                 <span className="font-label-sm text-label-sm text-on-surface-variant">Verified Resident</span>
               </div>
             </div>
-            <Link
-              to="/v2/citizen-login"
+            <button
+              type="button"
+              onClick={handleLogout}
               className="inline-flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg border border-outline-variant hover:bg-error-container hover:text-on-error-container text-on-surface-variant font-label-md text-label-md transition-colors"
             >
               <span className="material-symbols-outlined text-base">logout</span>
               <span>Logout</span>
-            </Link>
+            </button>
           </div>
         </header>
 
@@ -283,7 +301,7 @@ export default function CitizenDashboardPage() {
               <div className="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex items-center justify-between">
                 <div className="flex flex-col">
                   <span className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Total Filed</span>
-                  <span className="font-headline-md text-headline-md text-on-surface font-bold mt-0.5">4</span>
+                  <span className="font-headline-md text-headline-md text-on-surface font-bold mt-0.5">{totalFiled}</span>
                   <span className="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1 mt-0.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-secondary" /> Lifetime dossiers
                   </span>
@@ -296,7 +314,7 @@ export default function CitizenDashboardPage() {
               <div className="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex items-center justify-between">
                 <div className="flex flex-col">
                   <span className="font-label-sm text-label-sm uppercase tracking-wider text-secondary">In Progress</span>
-                  <span className="font-headline-md text-headline-md text-secondary font-bold mt-0.5">1</span>
+                  <span className="font-headline-md text-headline-md text-secondary font-bold mt-0.5">{inProgressCount}</span>
                   <span className="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1 mt-0.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-ping" /> Active investigations
                   </span>
@@ -309,9 +327,9 @@ export default function CitizenDashboardPage() {
               <div className="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex items-center justify-between">
                 <div className="flex flex-col">
                   <span className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Resolved</span>
-                  <span className="font-headline-md text-headline-md text-on-surface font-bold mt-0.5">2</span>
+                  <span className="font-headline-md text-headline-md text-on-surface font-bold mt-0.5">{resolvedCount}</span>
                   <span className="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1 mt-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-surface-tint" /> 50% success rate
+                    <span className="w-1.5 h-1.5 rounded-full bg-surface-tint" /> {totalFiled > 0 ? Math.round((resolvedCount / totalFiled) * 100) : 0}% success rate
                   </span>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-surface-container-high text-on-surface flex items-center justify-center">
@@ -322,7 +340,7 @@ export default function CitizenDashboardPage() {
               <div className="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex items-center justify-between">
                 <div className="flex flex-col">
                   <span className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Pending</span>
-                  <span className="font-headline-md text-headline-md text-on-surface font-bold mt-0.5">1</span>
+                  <span className="font-headline-md text-headline-md text-on-surface font-bold mt-0.5">{pendingCount}</span>
                   <span className="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1 mt-0.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-outline" /> Awaiting officer intake
                   </span>
@@ -343,13 +361,13 @@ export default function CitizenDashboardPage() {
                   <div className="flex flex-col">
                     <span className="font-label-lg text-label-lg font-bold">Portal Synchronization Interrupted</span>
                     <span className="font-body-sm text-body-sm">
-                      Failed to load grievance records from the Central Grievance Monitoring Registry. (HTTP Error Code: 503 Service Unavailable).
+                      {error || 'Failed to load grievance records from the Central Grievance Monitoring Registry.'}
                     </span>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setActiveState('default')}
+                  onClick={fetchGrievances}
                   className="px-space-md py-space-xs rounded-lg bg-on-error-container text-error-container hover:opacity-90 transition-all font-label-md text-label-md flex items-center gap-1 whitespace-nowrap"
                 >
                   <span className="material-symbols-outlined text-sm">refresh</span>
@@ -398,10 +416,11 @@ export default function CitizenDashboardPage() {
                   </Link>
                   <button
                     type="button"
-                    onClick={() => setActiveState('default')}
-                    className="px-space-md py-space-sm rounded-xl bg-surface-container text-on-surface-variant hover:text-on-surface font-label-lg text-label-lg transition-colors"
+                    onClick={fetchGrievances}
+                    className="px-space-md py-space-sm rounded-xl bg-surface-container text-on-surface-variant hover:text-on-surface font-label-lg text-label-lg transition-colors flex items-center gap-1"
                   >
-                    Back to Sample Data
+                    <span className="material-symbols-outlined text-sm">refresh</span>
+                    <span>Refresh</span>
                   </button>
                 </div>
               </div>
@@ -472,45 +491,51 @@ export default function CitizenDashboardPage() {
                     <tbody className="text-body-sm font-body-sm text-on-surface divide-y-0">
                       {filteredGrievances.map((item) => (
                         <tr
-                          key={item.id}
-                          onClick={() => navigate('/v2/citizen-grievance-detail')}
+                          key={item.id || item.trackingId}
+                          onClick={() => navigate('/v2/citizen-grievance-detail', { state: { grievanceId: item.id, trackingId: item.trackingId, grievance: item } })}
                           className="hover:bg-surface-container-low transition-colors cursor-pointer group"
                         >
                           <td className="py-space-md px-space-md font-code-tracking text-code-tracking text-secondary font-semibold whitespace-nowrap">
                             <span className="flex items-center gap-1">
                               <span className="material-symbols-outlined text-xs text-secondary">tag</span>
-                              <span>{item.id}</span>
+                              <span>{item.trackingId || `GRV-${item.id}`}</span>
                             </span>
                           </td>
                           <td className="py-space-md px-space-md font-body-md text-body-md font-medium text-on-surface max-w-sm">
                             <div className="flex flex-col">
-                              <span className="group-hover:text-secondary transition-colors font-semibold">{item.title}</span>
-                              <span className="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">{item.desc}</span>
+                              <span className="group-hover:text-secondary transition-colors font-semibold">{item.subject}</span>
+                              <span className="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">{item.description}</span>
                             </div>
                           </td>
                           <td className="py-space-md px-space-md whitespace-nowrap text-on-surface-variant font-medium">
                             <span className="flex items-center gap-1.5">
-                              <span className="material-symbols-outlined text-sm text-on-surface-variant">{item.deptIcon}</span>
-                              {item.department}
+                              <span className="material-symbols-outlined text-sm text-on-surface-variant">{getDeptIcon(item.departmentName)}</span>
+                              {item.departmentName || 'General Grievance Directorate'}
                             </span>
                           </td>
                           <td className="py-space-md px-space-md whitespace-nowrap">
                             {item.status === 'IN_PROGRESS' && (
                               <span className="inline-flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm font-semibold">
                                 <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
-                                {item.statusLabel}
+                                In Progress
                               </span>
                             )}
                             {item.status === 'RESOLVED' && (
                               <span className="inline-flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-surface-container-high text-on-surface font-label-sm text-label-sm font-semibold">
                                 <span className="material-symbols-outlined text-sm text-secondary">check_circle</span>
-                                {item.statusLabel}
+                                Resolved
                               </span>
                             )}
-                            {item.status === 'SUBMITTED' && (
+                            {(item.status === 'SUBMITTED' || item.status === 'PENDING') && (
                               <span className="inline-flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-surface-variant text-on-secondary-fixed font-label-sm text-label-sm font-semibold">
                                 <span className="w-2 h-2 rounded-full bg-secondary" />
-                                {item.statusLabel}
+                                Pending
+                              </span>
+                            )}
+                            {item.status === 'REJECTED' && (
+                              <span className="inline-flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-error-container text-on-error-container font-label-sm text-label-sm font-semibold">
+                                <span className="w-2 h-2 rounded-full bg-error" />
+                                Rejected
                               </span>
                             )}
                           </td>
@@ -535,17 +560,25 @@ export default function CitizenDashboardPage() {
                             )}
                           </td>
                           <td className="py-space-md px-space-md whitespace-nowrap font-code-tracking text-code-tracking text-on-surface-variant">
-                            {item.date}
+                            {formatDate(item.createdAt)}
                           </td>
                           <td className="py-space-md px-space-md whitespace-nowrap">
                             {item.isAppealed ? (
                               <span className="inline-flex items-center gap-1 px-space-xs py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-label-sm text-label-sm font-bold shadow-sm">
                                 <span className="material-symbols-outlined text-xs">bolt</span>
-                                <span>{item.appealBadge}</span>
+                                <span>⚡ Appealed (Under Re-Review)</span>
+                              </span>
+                            ) : item.feedback ? (
+                              <span className="font-label-sm text-label-sm text-on-surface-variant bg-surface-container px-space-xs py-0.5 rounded">
+                                Feedback Submitted (★ {item.feedback.rating}/5)
+                              </span>
+                            ) : item.status === 'RESOLVED' ? (
+                              <span className="font-label-sm text-label-sm text-secondary bg-surface-container-high px-space-xs py-0.5 rounded font-semibold">
+                                Rate Resolution
                               </span>
                             ) : (
                               <span className="font-label-sm text-label-sm text-on-surface-variant bg-surface-container px-space-xs py-0.5 rounded">
-                                {item.appealBadge}
+                                Standard Docket
                               </span>
                             )}
                           </td>

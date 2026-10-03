@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import api from '../services/api';
+import { useAuth } from '../context/useAuth';
 
 /**
  * CitizenGrievanceDetailPage (v2)
@@ -13,70 +15,198 @@ import { Link } from 'react-router-dom';
  * - Interactive Citizen Action Center (5-star rating, comments, statutory appeal filing form)
  */
 export default function CitizenGrievanceDetailPage() {
-  const [screenState, setScreenState] = useState('stateA'); // 'stateA' | 'stateB' | 'stateC' | 'loading' | 'error'
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  // Passed from navigation state or URL query params
+  const initialGrievance = location.state?.grievance || null;
+  const targetGrievanceId = location.state?.grievanceId || new URLSearchParams(location.search).get('id') || null;
+  const targetTrackingId = location.state?.trackingId || new URLSearchParams(location.search).get('trackingId') || null;
+
+  const [dossier, setDossier] = useState(initialGrievance);
+  const [screenState, setScreenState] = useState(initialGrievance ? 'ready' : 'loading'); // 'ready' | 'loading' | 'error' | 'empty'
+  const [simOverride, setSimOverride] = useState(null); // 'stateA' | 'stateB' | 'stateC' | null
+  const [errorMessage, setErrorMessage] = useState('');
+  const [actionError, setActionError] = useState('');
+
+  // Feedback state
   const [rating, setRating] = useState(0);
   const [feedbackComment, setFeedbackComment] = useState('');
-  const [appealReason, setAppealReason] = useState(
-    'The primary intersection hazard remains unrectified because light pole L-43 was left without replacement bulb, leaving the crosswalk dark. Requesting secondary supervisor review.'
-  );
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+
+  // Appeal state
+  const [appealReason, setAppealReason] = useState('');
   const [showAppealForm, setShowAppealForm] = useState(false);
+  const [isSubmittingAppeal, setIsSubmittingAppeal] = useState(false);
+
   const [copied, setCopied] = useState(false);
 
-  // MOCK DATA - replaced with real API data in a later session
-  const mockDossier = {
-    id: 'GRV-A99104F2',
-    subject: 'Street lamp outage causing severe hazard at Elm St intersection',
-    department: 'Dept of Public Lighting & Energy',
-    division: 'Metro Grid West',
-    dateSubmitted: 'Sep 28, 2024 • 09:14 AM',
-    dateUpdated: 'Oct 02, 2024 • 04:30 PM',
-    location: 'Elm St & 4th Ave Cross (Ward 12 • Pole #L-42/43)',
-    statement:
-      'The dual sodium vapor streetlight cluster at Elm & 4th cross has been non-operational for over 8 calendar days. Vehicles turning onto Elm St have nearly hit pedestrian crossers twice this week.',
-    priority: 'Medium',
-    status: screenState === 'stateC' ? 'Under Re-Review' : 'Resolved',
-    timeline: [
-      {
-        title: 'Docket Intake & Department Triage',
-        date: 'Sep 28, 2024 • 10:30 AM',
-        desc: 'Assigned to Municipal Lighting Division Unit 4. Initial triage determined non-emergency high priority due to pedestrian crosswalk proximity.',
-        officer: 'GRO Officer Sarah Jenkins (Staff ID #8841)',
-        icon: 'badge',
-      },
-      {
-        title: 'Field Inspection Dispatched',
-        date: 'Sep 30, 2024 • 02:15 PM',
-        desc: 'Ground technician verified ballast failure on pole #L-42. Replacement parts requisitioned from Central Depot. Work order #WO-994 issued.',
-        officer: 'GRO Field Supervisor Marcus Vance (Lighting Maintenance)',
-        icon: 'engineering',
-      },
-      {
-        title: 'Status Updated to Resolved',
-        date: 'Oct 02, 2024 • 04:30 PM',
-        desc: 'High-efficiency LED luminaire installed and photometrically tested. Luminaire is operational and daylight sensor verified functioning.',
-        officer: 'GRO Officer Sarah Jenkins (Closing Authority)',
-        icon: 'verified_user',
-        isFinal: true,
-      },
-    ],
+  const loadGrievanceDetails = async () => {
+    if (!dossier) {
+      setScreenState('loading');
+    }
+    setErrorMessage('');
+    try {
+      const res = await api.get('/api/grievances/mine');
+      if (res.data && res.data.success) {
+        const list = res.data.data || [];
+        if (list.length === 0) {
+          setScreenState('empty');
+          return;
+        }
+
+        let matched = null;
+        if (targetGrievanceId) {
+          matched = list.find((g) => String(g.id) === String(targetGrievanceId));
+        }
+        if (!matched && targetTrackingId) {
+          matched = list.find((g) => (g.trackingId || '').toUpperCase() === targetTrackingId.toUpperCase());
+        }
+        if (!matched && initialGrievance) {
+          matched = list.find((g) => g.id === initialGrievance.id || g.trackingId === initialGrievance.trackingId);
+        }
+        // Fallback to first grievance in list if direct URL access without params
+        if (!matched) {
+          matched = list[0];
+        }
+
+        setDossier(matched);
+        setScreenState('ready');
+      } else {
+        setErrorMessage(res.data?.message || 'Failed to load grievance details.');
+        setScreenState('error');
+      }
+    } catch (err) {
+      console.error('Failed to fetch citizen grievance:', err);
+      if (!dossier) {
+        setErrorMessage(
+          err.response?.data?.message ||
+          'Failed to synchronize dossier with Central Grievance Monitoring Registry.'
+        );
+        setScreenState('error');
+      }
+    }
   };
 
+  useEffect(() => {
+    loadGrievanceDetails();
+  }, [targetGrievanceId, targetTrackingId]);
+
   const handleCopyId = () => {
-    navigator.clipboard?.writeText(mockDossier.id);
+    if (!dossier) return;
+    const idToCopy = dossier.trackingId || `GRV-${dossier.id}`;
+    navigator.clipboard?.writeText(idToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleFeedbackSubmit = () => {
-    // MOCK DATA - replaced with real API data in a later session
-    setScreenState('stateB');
+  const handleFeedbackSubmit = async (e) => {
+    if (e) e.preventDefault();
+    setActionError('');
+    if (rating < 1 || rating > 5) {
+      setActionError('Please select a rating between 1 and 5 stars.');
+      return;
+    }
+
+    setIsSubmittingFeedback(true);
+    try {
+      const res = await api.post(`/api/grievances/${dossier.id}/feedback`, {
+        rating,
+        comment: feedbackComment.trim(),
+      });
+
+      if (res.data && res.data.success) {
+        setDossier(res.data.data);
+        setActionError('');
+        setSimOverride(null);
+      } else {
+        setActionError(res.data?.message || 'Failed to submit feedback.');
+      }
+    } catch (err) {
+      console.error('Failed to submit feedback:', err);
+      setActionError(err.response?.data?.message || 'Failed to record feedback.');
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
   };
 
-  const handleAppealSubmit = () => {
-    // MOCK DATA - replaced with real API data in a later session
-    setScreenState('stateC');
-    setShowAppealForm(false);
+  const handleAppealSubmit = async (e) => {
+    if (e) e.preventDefault();
+    setActionError('');
+    if (!appealReason.trim()) {
+      setActionError('Statement of appeal grounds is mandatory.');
+      return;
+    }
+
+    if (!dossier.feedback?.id) {
+      setActionError('Feedback record ID not found for this grievance.');
+      return;
+    }
+
+    setIsSubmittingAppeal(true);
+    try {
+      const res = await api.patch(`/api/feedback/${dossier.feedback.id}/appeal`, {
+        reason: appealReason.trim(),
+      });
+
+      if (res.data && res.data.success) {
+        setDossier(res.data.data);
+        setShowAppealForm(false);
+        setActionError('');
+        setSimOverride(null);
+      } else {
+        setActionError(res.data?.message || 'Failed to file appeal.');
+      }
+    } catch (err) {
+      console.error('Failed to raise appeal:', err);
+      setActionError(err.response?.data?.message || 'Failed to submit formal appeal.');
+    } finally {
+      setIsSubmittingAppeal(false);
+    }
   };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/v2/citizen-login');
+  };
+
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Determine active action state:
+  // Priority: manual simulation override (if clicked by evaluator) -> real data state
+  const isAppealed = Boolean(dossier?.isAppealed || dossier?.feedback?.appealed);
+  const hasFeedback = Boolean(dossier?.feedback && dossier.feedback.id);
+  const isResolved = dossier?.status === 'RESOLVED';
+
+  let currentActionState = 'in_progress';
+  if (simOverride) {
+    currentActionState = simOverride;
+  } else if (isAppealed) {
+    currentActionState = 'stateC';
+  } else if (hasFeedback) {
+    currentActionState = 'stateB';
+  } else if (isResolved) {
+    currentActionState = 'stateA';
+  } else {
+    currentActionState = 'in_progress';
+  }
+
+  const logs = dossier?.resolutionLogs || [];
 
   return (
     <div className="bg-background font-body-md text-on-surface antialiased min-h-screen">
@@ -125,8 +255,10 @@ export default function CitizenGrievanceDetailPage() {
           <div className="flex items-center gap-space-sm p-space-sm bg-surface-container-low rounded-lg">
             <span className="material-symbols-outlined text-secondary text-sm">verified_user</span>
             <div className="flex flex-col">
-              <span className="font-label-sm text-label-sm text-on-surface font-semibold">National Portal ID</span>
-              <span className="font-code-tracking text-code-tracking text-on-surface-variant">UID-VNC-7821</span>
+              <span className="font-label-sm text-label-sm text-on-surface font-semibold">Citizen Identity</span>
+              <span className="font-code-tracking text-code-tracking text-on-surface-variant">
+                {user?.email || 'Authenticated User'}
+              </span>
             </div>
           </div>
         </div>
@@ -141,48 +273,70 @@ export default function CitizenGrievanceDetailPage() {
               <span className="material-symbols-outlined text-xs">shield_person</span>
               <span className="font-label-sm text-label-sm">Citizen Grievance Dossier</span>
             </div>
-            <div className="hidden sm:flex items-center gap-space-xs px-space-sm py-space-xs rounded-full bg-surface-container text-on-surface-variant">
-              <span className="material-symbols-outlined text-xs">account_balance</span>
-              <span className="font-label-sm text-label-sm">Dept of Public Works & Utilities</span>
-            </div>
+            {dossier?.departmentName && (
+              <div className="hidden sm:flex items-center gap-space-xs px-space-sm py-space-xs rounded-full bg-surface-container text-on-surface-variant">
+                <span className="material-symbols-outlined text-xs">account_balance</span>
+                <span className="font-label-sm text-label-sm">{dossier.departmentName}</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-space-md">
             <div className="flex items-center gap-space-sm">
-              <img
-                alt="Profile"
-                className="w-8 h-8 rounded-full object-cover ring-1 ring-surface-container-high"
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-              />
+              <div className="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-xs ring-1 ring-surface-container-high">
+                {(user?.fullName || user?.name || user?.email || 'C')[0].toUpperCase()}
+              </div>
               <div className="hidden md:flex flex-col">
-                <span className="font-label-lg text-label-lg text-on-surface leading-tight">Eleanor Vance</span>
-                <span className="font-label-sm text-label-sm text-on-surface-variant">Citizen</span>
+                <span className="font-label-lg text-label-lg text-on-surface leading-tight">
+                  {user?.fullName || user?.name || 'Citizen User'}
+                </span>
+                <span className="font-label-sm text-label-sm text-on-surface-variant">
+                  {user?.email || 'Citizen'}
+                </span>
               </div>
             </div>
-            <Link
-              to="/v2/citizen-login"
+            <button
+              type="button"
+              onClick={handleLogout}
               className="inline-flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg border border-outline-variant hover:bg-error-container hover:text-on-error-container text-on-surface-variant font-label-md text-label-md transition-colors"
             >
               <span className="material-symbols-outlined text-base">logout</span>
               <span>Logout</span>
-            </Link>
+            </button>
           </div>
         </header>
 
         {/* Page Content */}
         <main className="w-full pt-20 bg-background flex-1 px-space-lg py-space-lg">
           <div className="flex flex-col w-full">
-            {/* Interactive View Switcher */}
+            {/* View State Switcher / Evaluator Simulator */}
             <div className="mb-space-lg p-space-sm bg-surface-container rounded-xl flex flex-wrap items-center justify-between gap-space-sm shadow-sm">
               <div className="flex items-center gap-space-xs text-on-surface-variant font-label-md text-label-md">
                 <span className="material-symbols-outlined text-secondary text-sm">tune</span>
-                <span>Citizen State Simulator:</span>
+                <span>Citizen State Simulator / Evaluator:</span>
               </div>
               <div className="flex flex-wrap items-center gap-space-xs">
                 <button
                   type="button"
-                  onClick={() => setScreenState('stateA')}
+                  onClick={() => {
+                    setSimOverride(null);
+                    setScreenState('ready');
+                  }}
                   className={`px-space-sm py-1 rounded-lg text-label-sm font-label-sm transition-all ${
-                    screenState === 'stateA'
+                    !simOverride && screenState === 'ready'
+                      ? 'bg-secondary text-on-secondary shadow-sm font-semibold'
+                      : 'bg-surface-container-lowest text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Live Backend State
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSimOverride('stateA');
+                    setScreenState('ready');
+                  }}
+                  className={`px-space-sm py-1 rounded-lg text-label-sm font-label-sm transition-all ${
+                    simOverride === 'stateA'
                       ? 'bg-secondary text-on-secondary shadow-sm font-semibold'
                       : 'bg-surface-container-lowest text-on-surface-variant hover:text-on-surface'
                   }`}
@@ -191,9 +345,12 @@ export default function CitizenGrievanceDetailPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setScreenState('stateB')}
+                  onClick={() => {
+                    setSimOverride('stateB');
+                    setScreenState('ready');
+                  }}
                   className={`px-space-sm py-1 rounded-lg text-label-sm font-label-sm transition-all ${
-                    screenState === 'stateB'
+                    simOverride === 'stateB'
                       ? 'bg-secondary text-on-secondary shadow-sm font-semibold'
                       : 'bg-surface-container-lowest text-on-surface-variant hover:text-on-surface'
                   }`}
@@ -202,9 +359,12 @@ export default function CitizenGrievanceDetailPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setScreenState('stateC')}
+                  onClick={() => {
+                    setSimOverride('stateC');
+                    setScreenState('ready');
+                  }}
                   className={`px-space-sm py-1 rounded-lg text-label-sm font-label-sm transition-all ${
-                    screenState === 'stateC'
+                    simOverride === 'stateC'
                       ? 'bg-secondary text-on-secondary shadow-sm font-semibold'
                       : 'bg-surface-container-lowest text-on-surface-variant hover:text-on-surface'
                   }`}
@@ -238,7 +398,7 @@ export default function CitizenGrievanceDetailPage() {
             </div>
 
             {/* Loading View State */}
-            {screenState === 'loading' && (
+            {screenState === 'loading' && !dossier && (
               <div className="flex flex-col items-center justify-center py-24 bg-surface-container-lowest rounded-xl shadow-sm">
                 <div className="relative w-16 h-16 mb-space-md">
                   <div className="w-16 h-16 rounded-full border-4 border-surface-container-high border-t-secondary animate-spin" />
@@ -248,7 +408,7 @@ export default function CitizenGrievanceDetailPage() {
                 </div>
                 <span className="font-headline-sm text-headline-sm text-on-surface font-bold">Retrieving Grievance Dossier</span>
                 <p className="font-body-md text-body-md text-on-surface-variant mt-space-xs text-center max-w-md">
-                  Syncing immutable ledger records for <span className="font-code-tracking font-medium text-secondary">{mockDossier.id}</span> with Municipal Utilities Division...
+                  Syncing immutable records for <span className="font-code-tracking font-medium text-secondary">{targetTrackingId || 'Docket'}</span> with Municipal Utilities Division...
                 </p>
               </div>
             )}
@@ -261,29 +421,56 @@ export default function CitizenGrievanceDetailPage() {
                 </div>
                 <span className="font-headline-sm text-headline-sm text-error font-bold">Failed to Synchronize Dossier</span>
                 <p className="font-body-md text-body-md text-on-surface-variant mt-space-xs max-w-lg">
-                  The municipal record server timed out while validating the cryptographic signature of grievance <span className="font-code-tracking font-medium text-on-surface">{mockDossier.id}</span>.
+                  {errorMessage || 'The municipal record server could not locate or validate this grievance record.'}
                 </p>
                 <div className="flex items-center gap-space-md mt-space-lg">
                   <button
                     type="button"
-                    onClick={() => setScreenState('stateA')}
+                    onClick={loadGrievanceDetails}
                     className="px-space-lg py-space-sm rounded-lg bg-secondary text-on-secondary font-label-lg text-label-lg shadow-sm hover:opacity-95 transition-opacity flex items-center gap-space-xs"
                   >
                     <span className="material-symbols-outlined text-base">refresh</span>
                     <span>Retry Transaction</span>
                   </button>
-                  <button
-                    type="button"
+                  <Link
+                    to="/v2/citizen-dashboard"
                     className="px-space-md py-space-sm rounded-lg bg-surface-container text-on-surface-variant font-label-lg text-label-lg hover:text-on-surface transition-colors"
                   >
-                    Report System Incident
-                  </button>
+                    Back to Dashboard
+                  </Link>
                 </div>
               </div>
             )}
 
-            {/* Main Content (States A, B, C) */}
-            {screenState !== 'loading' && screenState !== 'error' && (
+            {/* Empty View State */}
+            {screenState === 'empty' && (
+              <div className="flex flex-col items-center justify-center py-20 px-space-lg bg-surface-container-lowest rounded-xl shadow-sm text-center">
+                <div className="w-16 h-16 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center mb-space-md shadow-sm">
+                  <span className="material-symbols-outlined text-3xl">folder_off</span>
+                </div>
+                <span className="font-headline-sm text-headline-sm text-on-surface font-bold">No Grievance Found</span>
+                <p className="font-body-md text-body-md text-on-surface-variant mt-space-xs max-w-lg">
+                  No grievances matching the requested reference were found in your citizen account.
+                </p>
+                <div className="flex items-center gap-space-md mt-space-lg">
+                  <Link
+                    to="/v2/submit-grievance"
+                    className="px-space-lg py-space-sm rounded-lg bg-secondary text-on-secondary font-label-lg text-label-lg shadow-sm hover:opacity-95 transition-opacity"
+                  >
+                    Lodge New Grievance
+                  </Link>
+                  <Link
+                    to="/v2/citizen-dashboard"
+                    className="px-space-md py-space-sm rounded-lg bg-surface-container text-on-surface-variant font-label-lg text-label-lg hover:text-on-surface transition-colors"
+                  >
+                    Back to Dashboard
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {/* Main Content (States A, B, C or In-Progress) */}
+            {dossier && screenState !== 'error' && screenState !== 'empty' && (
               <div className="flex flex-col gap-space-lg">
                 {/* Breadcrumb Navigation */}
                 <div className="flex flex-wrap items-center justify-between gap-space-md">
@@ -301,7 +488,9 @@ export default function CitizenGrievanceDetailPage() {
                         Dashboard
                       </Link>
                       <span>/</span>
-                      <span className="font-code-tracking text-on-surface font-semibold">{mockDossier.id}</span>
+                      <span className="font-code-tracking text-on-surface font-semibold">
+                        {dossier.trackingId || `GRV-${dossier.id}`}
+                      </span>
                     </nav>
                   </div>
                   <div className="flex items-center gap-space-xs font-label-sm text-label-sm text-on-surface-variant bg-surface-container-low px-space-md py-1.5 rounded-full">
@@ -311,7 +500,7 @@ export default function CitizenGrievanceDetailPage() {
                 </div>
 
                 {/* State C Banner (Appealed) */}
-                {screenState === 'stateC' && (
+                {(currentActionState === 'stateC' || isAppealed) && (
                   <div className="p-space-md rounded-xl bg-tertiary-fixed text-on-tertiary-fixed shadow-sm">
                     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md">
                       <div className="flex items-start gap-space-md">
@@ -326,13 +515,13 @@ export default function CitizenGrievanceDetailPage() {
                             </span>
                           </div>
                           <p className="font-body-md text-body-md mt-0.5 opacity-90">
-                            Your appeal has been formally assigned to the Appellate Nodal Officer. Target review timeline: within 7 business days.
+                            Your appeal has been formally assigned to the Appellate Nodal Authority. Priority has been escalated to HIGH.
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-space-sm shrink-0 self-end md:self-auto">
                         <span className="px-space-sm py-1 rounded-lg bg-surface-container-lowest/80 text-on-tertiary-fixed font-code-tracking text-label-sm">
-                          APL-REF-2024-819
+                          {dossier.trackingId || `APL-${dossier.id}`}
                         </span>
                       </div>
                     </div>
@@ -345,7 +534,9 @@ export default function CitizenGrievanceDetailPage() {
                   <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-space-md pb-space-md bg-surface-container-low/50 -mx-space-lg -mt-space-lg p-space-lg rounded-t-xl">
                     <div className="flex flex-col gap-space-xs">
                       <div className="flex flex-wrap items-center gap-space-sm">
-                        <span className="font-code-tracking text-headline-sm text-secondary font-bold">{mockDossier.id}</span>
+                        <span className="font-code-tracking text-headline-sm text-secondary font-bold">
+                          {dossier.trackingId || `GRV-${dossier.id}`}
+                        </span>
                         <button
                           type="button"
                           onClick={handleCopyId}
@@ -364,18 +555,28 @@ export default function CitizenGrievanceDetailPage() {
                         </span>
                       </div>
                       <h1 className="font-headline-lg text-headline-lg text-on-surface font-extrabold leading-tight">
-                        {mockDossier.subject}
+                        {dossier.subject}
                       </h1>
                     </div>
                     {/* Badges */}
                     <div className="flex flex-wrap items-center gap-space-sm shrink-0">
                       <div className="inline-flex items-center gap-1.5 px-space-md py-1.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-lg text-label-lg font-semibold">
                         <span className="material-symbols-outlined text-sm">priority</span>
-                        <span>Priority: {mockDossier.priority}</span>
+                        <span>Priority: {dossier.priority || 'MEDIUM'}</span>
                       </div>
                       <div className="inline-flex items-center gap-1.5 px-space-md py-1.5 rounded-full bg-surface-container-high text-on-surface font-label-lg text-label-lg font-semibold">
-                        <span className={`w-2.5 h-2.5 rounded-full ${screenState === 'stateC' ? 'bg-error animate-pulse' : 'bg-secondary'}`} />
-                        <span>Status: {mockDossier.status}</span>
+                        <span
+                          className={`w-2.5 h-2.5 rounded-full ${
+                            currentActionState === 'stateC' || isAppealed
+                              ? 'bg-tertiary animate-pulse'
+                              : dossier.status === 'RESOLVED'
+                              ? 'bg-secondary'
+                              : dossier.status === 'REJECTED'
+                              ? 'bg-error'
+                              : 'bg-primary'
+                          }`}
+                        />
+                        <span>Status: {dossier.status || 'PENDING'}</span>
                       </div>
                     </div>
                   </div>
@@ -387,8 +588,10 @@ export default function CitizenGrievanceDetailPage() {
                         <span className="material-symbols-outlined text-base text-secondary">domain</span>
                         <span>Assigned Department</span>
                       </div>
-                      <span className="font-title-md text-title-md text-on-surface font-bold leading-snug">{mockDossier.department}</span>
-                      <span className="font-body-sm text-body-sm text-on-surface-variant">Division: {mockDossier.division}</span>
+                      <span className="font-title-md text-title-md text-on-surface font-bold leading-snug">
+                        {dossier.departmentName || 'General Administration'}
+                      </span>
+                      <span className="font-body-sm text-body-sm text-on-surface-variant">Division: Redressal Operations</span>
                     </div>
 
                     <div className="p-space-md rounded-xl bg-surface-container-low flex flex-col gap-1">
@@ -396,7 +599,9 @@ export default function CitizenGrievanceDetailPage() {
                         <span className="material-symbols-outlined text-base text-secondary">calendar_today</span>
                         <span>Date Submitted</span>
                       </div>
-                      <span className="font-title-md text-title-md text-on-surface font-bold">{mockDossier.dateSubmitted}</span>
+                      <span className="font-title-md text-title-md text-on-surface font-bold">
+                        {formatDateTime(dossier.createdAt)}
+                      </span>
                       <span className="font-body-sm text-body-sm text-on-surface-variant">Web Submission</span>
                     </div>
 
@@ -405,16 +610,23 @@ export default function CitizenGrievanceDetailPage() {
                         <span className="material-symbols-outlined text-base text-secondary">update</span>
                         <span>Date Last Updated</span>
                       </div>
-                      <span className="font-title-md text-title-md text-on-surface font-bold">{mockDossier.dateUpdated}</span>
-                      <span className="font-body-sm text-body-sm text-on-surface-variant">Closure by GRO</span>
+                      <span className="font-title-md text-title-md text-on-surface font-bold">
+                        {formatDateTime(
+                          logs.length > 0 ? logs[logs.length - 1].loggedAt : dossier.createdAt
+                        )}
+                      </span>
+                      <span className="font-body-sm text-body-sm text-on-surface-variant">Official Redressal Log</span>
                     </div>
 
                     <div className="p-space-md rounded-xl bg-surface-container-low flex flex-col gap-1">
                       <div className="flex items-center gap-space-xs text-on-surface-variant font-label-sm text-label-sm uppercase">
                         <span className="material-symbols-outlined text-base text-secondary">pin_drop</span>
-                        <span>Incident Coordinates</span>
+                        <span>Tracking Reference</span>
                       </div>
-                      <span className="font-title-md text-title-md text-on-surface font-bold">{mockDossier.location}</span>
+                      <span className="font-title-md text-title-md text-on-surface font-bold font-code-tracking">
+                        {dossier.trackingId || `REF-${dossier.id}`}
+                      </span>
+                      <span className="font-body-sm text-body-sm text-on-surface-variant">Central Registry Index</span>
                     </div>
                   </div>
 
@@ -427,8 +639,8 @@ export default function CitizenGrievanceDetailPage() {
                       </span>
                       <span className="font-label-sm text-label-sm text-on-surface-variant font-code-tracking">Original Intake Text</span>
                     </div>
-                    <div className="p-space-lg rounded-xl bg-surface-container-low text-on-surface font-body-md text-body-md leading-relaxed">
-                      {mockDossier.statement}
+                    <div className="p-space-lg rounded-xl bg-surface-container-low text-on-surface font-body-md text-body-md leading-relaxed whitespace-pre-wrap">
+                      {dossier.description || 'No detailed statement entered.'}
                     </div>
                   </div>
                 </div>
@@ -448,45 +660,62 @@ export default function CitizenGrievanceDetailPage() {
                       </div>
                       <div className="flex items-center gap-1 px-space-sm py-1 rounded-full bg-surface-container text-secondary font-label-sm text-label-sm font-semibold">
                         <span className="material-symbols-outlined text-sm">security_update_good</span>
-                        <span>3 Events Recorded</span>
+                        <span>{logs.length} Events Recorded</span>
                       </div>
                     </div>
 
                     {/* Timeline Rail */}
                     <div className="relative pl-6 space-y-space-lg">
                       <div className="absolute left-2.5 top-3 bottom-3 w-0.5 bg-surface-container-high" />
-                      {mockDossier.timeline.map((event, idx) => (
-                        <div key={idx} className="relative flex items-start gap-space-md">
-                          <div
-                            className={`absolute -left-6 top-1 w-5 h-5 rounded-full flex items-center justify-center ${
-                              event.isFinal
-                                ? 'bg-secondary text-on-secondary shadow-sm'
-                                : 'bg-surface-container-lowest ring-4 ring-secondary-fixed'
-                            }`}
-                          >
-                            {event.isFinal ? (
-                              <span className="material-symbols-outlined text-xs">check</span>
-                            ) : (
-                              <div className="w-2.5 h-2.5 rounded-full bg-secondary" />
-                            )}
-                          </div>
-                          <div
-                            className={`flex flex-col w-full p-space-md rounded-xl gap-space-xs ${
-                              event.isFinal ? 'bg-surface-container shadow-sm' : 'bg-surface-container-low'
-                            }`}
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-space-xs">
-                              <span className="font-title-md text-title-md text-on-surface font-bold">{event.title}</span>
-                              <span className="font-code-tracking text-label-sm text-on-surface-variant">{event.date}</span>
-                            </div>
-                            <p className="font-body-md text-body-md text-on-surface-variant">{event.desc}</p>
-                            <div className="flex items-center gap-space-xs pt-space-xs font-label-sm text-label-sm text-on-surface">
-                              <span className="material-symbols-outlined text-sm text-secondary">{event.icon}</span>
-                              <span>Handled by: <strong className="font-semibold">{event.officer}</strong></span>
-                            </div>
-                          </div>
+                      {logs.length === 0 ? (
+                        <div className="p-space-md rounded-xl bg-surface-container-low text-on-surface-variant text-body-md">
+                          No resolution updates recorded yet. The grievance has been registered and routed to the assigned department officer for initial review.
                         </div>
-                      ))}
+                      ) : (
+                        logs.map((log, idx) => {
+                          const isFinal = idx === logs.length - 1 && dossier.status === 'RESOLVED';
+                          return (
+                            <div key={log.id || idx} className="relative flex items-start gap-space-md">
+                              <div
+                                className={`absolute -left-6 top-1 w-5 h-5 rounded-full flex items-center justify-center ${
+                                  isFinal
+                                    ? 'bg-secondary text-on-secondary shadow-sm'
+                                    : 'bg-surface-container-lowest ring-4 ring-secondary-fixed'
+                                }`}
+                              >
+                                {isFinal ? (
+                                  <span className="material-symbols-outlined text-xs">check</span>
+                                ) : (
+                                  <div className="w-2.5 h-2.5 rounded-full bg-secondary" />
+                                )}
+                              </div>
+                              <div
+                                className={`flex flex-col w-full p-space-md rounded-xl gap-space-xs ${
+                                  isFinal ? 'bg-surface-container shadow-sm' : 'bg-surface-container-low'
+                                }`}
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-space-xs">
+                                  <span className="font-title-md text-title-md text-on-surface font-bold">
+                                    {log.actionTaken || 'Administrative Action'}
+                                  </span>
+                                  <span className="font-code-tracking text-label-sm text-on-surface-variant">
+                                    {formatDateTime(log.loggedAt)}
+                                  </span>
+                                </div>
+                                <p className="font-body-md text-body-md text-on-surface-variant whitespace-pre-wrap">
+                                  {log.remarks || 'No remarks recorded.'}
+                                </p>
+                                <div className="flex items-center gap-space-xs pt-space-xs font-label-sm text-label-sm text-on-surface">
+                                  <span className="material-symbols-outlined text-sm text-secondary">verified_user</span>
+                                  <span>
+                                    Handled by: <strong className="font-semibold">{log.groEmail || 'Grievance Redressal Officer'}</strong>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
 
                     <div className="p-space-md rounded-xl bg-surface-container-low flex items-center gap-space-md">
@@ -504,8 +733,15 @@ export default function CitizenGrievanceDetailPage() {
 
                   {/* Right: Citizen Action Center (5 Cols) */}
                   <div className="lg:col-span-5 flex flex-col gap-space-lg">
+                    {actionError && (
+                      <div className="p-space-md rounded-xl bg-error-container text-on-error-container text-body-md shadow-sm flex items-start gap-space-xs">
+                        <span className="material-symbols-outlined text-base mt-0.5">error_outline</span>
+                        <span>{actionError}</span>
+                      </div>
+                    )}
+
                     {/* STATE A: Fresh Resolved (Pending Feedback) */}
-                    {screenState === 'stateA' && (
+                    {currentActionState === 'stateA' && (
                       <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm flex flex-col gap-space-md">
                         <div className="flex items-center justify-between">
                           <div className="flex flex-col">
@@ -517,7 +753,7 @@ export default function CitizenGrievanceDetailPage() {
                           </span>
                         </div>
                         <p className="font-body-md text-body-md text-on-surface-variant">
-                          Please indicate whether the municipal field team resolved the streetlight outage at Elm & 4th Ave to your satisfaction.
+                          Please indicate whether the department resolved <strong className="text-on-surface">"{dossier.subject}"</strong> to your satisfaction.
                         </p>
 
                         {/* Interactive Star Rating */}
@@ -563,23 +799,35 @@ export default function CitizenGrievanceDetailPage() {
                         <button
                           type="button"
                           onClick={handleFeedbackSubmit}
-                          className="w-full py-space-sm rounded-lg bg-secondary text-on-secondary font-label-lg text-label-lg font-semibold shadow-sm hover:opacity-95 transition-opacity flex items-center justify-center gap-space-xs"
+                          disabled={isSubmittingFeedback || rating === 0}
+                          className="w-full py-space-sm rounded-lg bg-secondary text-on-secondary font-label-lg text-label-lg font-semibold shadow-sm hover:opacity-95 transition-opacity flex items-center justify-center gap-space-xs disabled:opacity-50"
                         >
-                          <span className="material-symbols-outlined text-lg">rate_review</span>
-                          <span>Submit Resolution Feedback</span>
+                          {isSubmittingFeedback ? (
+                            <>
+                              <span className="w-4 h-4 border-2 border-on-secondary border-t-transparent rounded-full animate-spin" />
+                              <span>Submitting Feedback...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="material-symbols-outlined text-lg">rate_review</span>
+                              <span>Submit Resolution Feedback</span>
+                            </>
+                          )}
                         </button>
                       </div>
                     )}
 
                     {/* STATE B: Rated (Shows submitted review & Raise Appeal option) */}
-                    {screenState === 'stateB' && (
+                    {currentActionState === 'stateB' && (
                       <div className="flex flex-col gap-space-lg">
                         {/* Submitted Evaluation Card */}
                         <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm flex flex-col gap-space-md">
                           <div className="flex items-center justify-between">
                             <div className="flex flex-col">
                               <span className="font-headline-sm text-headline-sm text-on-surface font-bold">Your Submitted Evaluation</span>
-                              <span className="font-body-sm text-body-sm text-on-surface-variant">Logged on Oct 03, 2024 • 08:20 AM</span>
+                              <span className="font-body-sm text-body-sm text-on-surface-variant">
+                                Logged on {formatDateTime(dossier.feedback?.submittedAt || dossier.feedback?.createdAt)}
+                              </span>
                             </div>
                             <span className="px-space-xs py-0.5 rounded-full bg-surface-container text-secondary font-label-sm text-label-sm font-semibold">
                               Recorded
@@ -588,17 +836,34 @@ export default function CitizenGrievanceDetailPage() {
                           <div className="p-space-md rounded-xl bg-surface-container-low flex flex-col gap-space-xs">
                             <div className="flex items-center gap-space-xs">
                               <div className="flex items-center text-secondary">
-                                <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                                <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                                <span className="material-symbols-outlined text-xl text-outline-variant">star</span>
-                                <span className="material-symbols-outlined text-xl text-outline-variant">star</span>
-                                <span className="material-symbols-outlined text-xl text-outline-variant">star</span>
+                                {[1, 2, 3, 4, 5].map((star) => {
+                                  const activeRating = dossier.feedback?.rating || rating || 5;
+                                  return (
+                                    <span
+                                      key={star}
+                                      className={`material-symbols-outlined text-xl ${
+                                        activeRating >= star ? 'text-secondary' : 'text-outline-variant'
+                                      }`}
+                                      style={{ fontVariationSettings: activeRating >= star ? "'FILL' 1" : "'FILL' 0" }}
+                                    >
+                                      star
+                                    </span>
+                                  );
+                                })}
                               </div>
-                              <span className="font-label-lg text-label-lg text-on-surface font-bold ml-1">2 / 5 Stars</span>
-                              <span className="font-body-sm text-body-sm text-error font-medium">(Dissatisfied)</span>
+                              <span className="font-label-lg text-label-lg text-on-surface font-bold ml-1">
+                                {dossier.feedback?.rating || rating || 5} / 5 Stars
+                              </span>
+                              <span
+                                className={`font-body-sm text-body-sm font-medium ${
+                                  (dossier.feedback?.rating || rating || 5) >= 4 ? 'text-secondary' : 'text-error'
+                                }`}
+                              >
+                                {(dossier.feedback?.rating || rating || 5) >= 4 ? '(Satisfied)' : '(Dissatisfied)'}
+                              </span>
                             </div>
                             <p className="font-body-md text-body-md text-on-surface mt-1 bg-surface-container-lowest p-space-sm rounded-lg shadow-sm">
-                              “Technicians fixed pole L-42, but the adjacent pole L-43 is still completely dark.”
+                              “{dossier.feedback?.comment || feedbackComment || 'Resolution marked complete.'}”
                             </p>
                           </div>
                         </div>
@@ -628,20 +893,31 @@ export default function CitizenGrievanceDetailPage() {
                                   rows={4}
                                   value={appealReason}
                                   onChange={(e) => setAppealReason(e.target.value)}
+                                  placeholder="Provide clear reasons explaining why the department's resolution was unsatisfactory..."
                                   className="w-full p-space-sm rounded-lg bg-surface-container-lowest text-on-surface font-body-md text-body-md focus:outline-none focus:ring-2 focus:ring-secondary shadow-sm resize-none border border-surface-container-high"
                                 />
                                 <span className="font-body-sm text-body-sm text-on-surface-variant">
-                                  This statement will be transmitted directly to the Office of the District Commissioner.
+                                  This statement will be transmitted directly to the Office of the Appellate Authority.
                                 </span>
                               </div>
                               <div className="flex items-center gap-space-sm">
                                 <button
                                   type="button"
                                   onClick={handleAppealSubmit}
-                                  className="flex-1 py-space-sm rounded-lg bg-secondary text-on-secondary font-label-lg text-label-lg font-semibold shadow-sm hover:opacity-95 transition-opacity flex items-center justify-center gap-space-xs"
+                                  disabled={isSubmittingAppeal || !appealReason.trim()}
+                                  className="flex-1 py-space-sm rounded-lg bg-secondary text-on-secondary font-label-lg text-label-lg font-semibold shadow-sm hover:opacity-95 transition-opacity flex items-center justify-center gap-space-xs disabled:opacity-50"
                                 >
-                                  <span className="material-symbols-outlined text-lg">send</span>
-                                  <span>Submit Formal Appeal</span>
+                                  {isSubmittingAppeal ? (
+                                    <>
+                                      <span className="w-4 h-4 border-2 border-on-secondary border-t-transparent rounded-full animate-spin" />
+                                      <span>Transmitting Appeal...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="material-symbols-outlined text-lg">send</span>
+                                      <span>Submit Formal Appeal</span>
+                                    </>
+                                  )}
                                 </button>
                                 <button
                                   type="button"
@@ -669,7 +945,7 @@ export default function CitizenGrievanceDetailPage() {
                     )}
 
                     {/* STATE C: Active Appeal Raised View */}
-                    {screenState === 'stateC' && (
+                    {currentActionState === 'stateC' && (
                       <div className="flex flex-col gap-space-md">
                         <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm flex flex-col gap-space-md">
                           <div className="flex items-center justify-between">
@@ -684,17 +960,48 @@ export default function CitizenGrievanceDetailPage() {
                           <div className="p-space-md rounded-xl bg-surface-container-low flex flex-col gap-space-sm">
                             <div className="flex items-center justify-between font-label-sm text-label-sm">
                               <span className="text-on-surface-variant">Appellate Case ID:</span>
-                              <span className="font-code-tracking font-bold text-on-surface">APL-2024-9042-REV</span>
+                              <span className="font-code-tracking font-bold text-on-surface">
+                                {dossier.trackingId || `APL-${dossier.id}`}
+                              </span>
                             </div>
                             <div className="flex items-center justify-between font-label-sm text-label-sm">
-                              <span className="text-on-surface-variant">Assigned Magistrate:</span>
-                              <span className="font-semibold text-on-surface">Hon. Vikram Anand (Addl. Collector)</span>
+                              <span className="text-on-surface-variant">Escalated Priority:</span>
+                              <span className="font-semibold text-error">HIGH (Appellate Escalation)</span>
                             </div>
                             <div className="flex items-center justify-between font-label-sm text-label-sm">
-                              <span className="text-on-surface-variant">Statutory Deadline:</span>
-                              <span className="font-code-tracking text-secondary font-bold">Oct 16, 2024 (7 Days Remaining)</span>
+                              <span className="text-on-surface-variant">Assigned Department:</span>
+                              <span className="font-semibold text-on-surface">{dossier.departmentName}</span>
+                            </div>
+                            <div className="flex flex-col gap-1 pt-2 border-t border-surface-container-high">
+                              <span className="text-on-surface-variant font-label-sm text-label-sm">Appeal Grounds Stated:</span>
+                              <p className="font-body-sm text-body-sm text-on-surface bg-surface-container-lowest p-2 rounded-lg">
+                                “{dossier.feedback?.appealReason || appealReason || 'Citizen requested formal review of resolution.'}”
+                              </p>
                             </div>
                           </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* IN-PROGRESS / PENDING View */}
+                    {currentActionState === 'in_progress' && (
+                      <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm flex flex-col gap-space-md">
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col">
+                            <span className="font-headline-sm text-headline-sm text-on-surface font-bold">Redressal In Progress</span>
+                            <span className="font-body-sm text-body-sm text-on-surface-variant">Assigned to {dossier.departmentName}</span>
+                          </div>
+                          <span className="px-space-xs py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm font-semibold">
+                            {dossier.status || 'PENDING'}
+                          </span>
+                        </div>
+                        <p className="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+                          Your grievance is currently under official review and administrative processing.
+                          Once the grievance redressal officer marks this docket as <strong>RESOLVED</strong>, the satisfaction feedback evaluation and statutory appeal protocols will be unlocked right here.
+                        </p>
+                        <div className="p-space-md rounded-xl bg-surface-container-low flex items-center gap-space-sm text-on-surface-variant font-label-sm">
+                          <span className="material-symbols-outlined text-secondary text-lg">info</span>
+                          <span>You will receive system notifications as official progress is logged.</span>
                         </div>
                       </div>
                     )}
