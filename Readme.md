@@ -64,6 +64,11 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 JWT_SECRET=
 JWT_EXPIRATION_MS=86400000
 GRO_DEFAULT_PASSWORD=GroPassword123!
+MAIL_HOST=smtp-relay.brevo.com
+MAIL_PORT=587
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_FROM_ADDRESS=noreply@grievanceportal.gov
 ```
 
 | Variable | Description | Required | Default |
@@ -75,6 +80,20 @@ GRO_DEFAULT_PASSWORD=GroPassword123!
 | `JWT_SECRET` | Base64-encoded secret key (≥256-bit) for JWT signing | Yes | Configured in application.yml |
 | `JWT_EXPIRATION_MS` | JWT validity window in milliseconds | No | `86400000` (24 hours) |
 | `GRO_DEFAULT_PASSWORD` | Default password used by `DataSeeder` for seeded GRO departmental accounts | No | `GroPassword123!` |
+| `MAIL_HOST` | Brevo SMTP relay hostname | No | `smtp-relay.brevo.com` |
+| `MAIL_PORT` | SMTP port with STARTTLS | No | `587` |
+| `MAIL_USERNAME` | Brevo SMTP login email | Yes (for delivery) | - |
+| `MAIL_PASSWORD` | Brevo SMTP key generated from dashboard | Yes (for delivery) | - |
+| `MAIL_FROM_ADDRESS` | Sender email address (must match Brevo verified sender) | No | `noreply@grievanceportal.gov` |
+
+### Email Notifications (Brevo Free SMTP Relay Setup)
+Email notifications are sent asynchronously on grievance status changes and resolution appeals using Brevo's free SMTP relay (300 emails/day free tier). To configure real email delivery:
+1. **Sign Up**: Create a free account at [brevo.com](https://www.brevo.com/) (formerly Sendinblue).
+2. **Verify Sender**: In your Brevo dashboard, navigate to **Senders & IP** &rarr; **Senders** and verify your sender email address.
+3. **Generate SMTP Key**: Navigate to **SMTP & API** &rarr; **SMTP** tab. Copy your SMTP login email and click **Generate a new SMTP key** to create an SMTP password.
+4. **Configure `.env`**: Set `MAIL_USERNAME`, `MAIL_PASSWORD`, and `MAIL_FROM_ADDRESS` (matching your verified sender) in `backend/.env`.
+
+> **Failure Isolation:** Email delivery is fully asynchronous and isolated. If credentials are left blank, invalid, or Brevo is unreachable, an SLF4J error is logged and the grievance status update transaction proceeds without error.
 
 ### Frontend Environment Variables (see `frontend/.env.example`)
 ```
@@ -84,14 +103,32 @@ VITE_API_BASE_URL=http://localhost:8080
 ## 6. API Documentation
 Once running, visit `/swagger-ui.html` for the full auto-generated API contract (method, path, auth requirement, request/response format for every endpoint).
 
-## 7. Core Entities
+## 7. Continuous Integration (CI)
+
+Automated testing is configured via GitHub Actions in [`.github/workflows/backend-ci.yml`](./.github/workflows/backend-ci.yml):
+- **Triggers**: Runs on every direct `push` to `main` and on every `pull_request` targeting the `main` branch.
+- **Environment**: Ubuntu (`ubuntu-latest`) runner with Eclipse Temurin JDK 17 and automated Maven dependency caching keyed to `backend/pom.xml`.
+- **Workflow Scope**: Executes `mvn -B test` inside the `backend/` directory to run all 27 JUnit 5 & Mockito unit tests and generate JaCoCo coverage reports.
+- **Zero Secrets Required**: All external dependencies (database repositories, Brevo SMTP mail sender) are mocked with Mockito; no database service containers or repository secrets are needed.
+- **Failure Blocking**: Any test assertion failure immediately fails the workflow (red ❌), preventing broken pull requests from merging into `main`.
+- **Viewing Runs**: Workflow execution runs, build logs, and status checks can be monitored in the **Actions** tab at the top of the GitHub repository, or within the "Checks" section of any open Pull Request.
+
+### Running Tests Locally
+To execute the complete unit test suite and generate JaCoCo coverage reports locally:
+```bash
+cd backend
+mvn test
+```
+The HTML coverage report will be generated at `backend/target/site/jacoco/index.html`.
+
+## 8. Core Entities
 User, Department, Grievance, ResolutionLog, Feedback — see [ER Diagram](./docs/diagrams/er-diagram.md) for relationships.
 
-## 8. Roles
+## 9. Roles
 | Role | Access |
 |---|---|
 | CITIZEN | Submit grievances, track status, submit feedback |
 | GRO | Department-scoped queue, update status, log resolutions |
 
-## 9. License
-MIT — see [LICENSE](./LICENSE).
+## 10. License
+MIT — see [LICENSE](./LICENSE).
