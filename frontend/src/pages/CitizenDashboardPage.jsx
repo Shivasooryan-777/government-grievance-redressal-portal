@@ -4,7 +4,7 @@ import api from '../services/api';
 import { useAuth } from '../context/useAuth';
 
 /**
- * CitizenDashboardPage (v2)
+ * CitizenDashboardPage
  * Converted faithfully from Stitch export: citizen_dashboard
  * 
  * Features:
@@ -60,7 +60,7 @@ export default function CitizenDashboardPage() {
 
   const handleLogout = () => {
     logout();
-    navigate('/v2/citizen-login');
+    navigate('/citizen-login');
   };
 
   const formatDate = (dateStr) => {
@@ -118,21 +118,21 @@ export default function CitizenDashboardPage() {
           </div>
           <nav className="flex flex-col px-space-sm gap-space-xs">
             <Link
-              to="/v2/citizen-dashboard"
+              to="/dashboard"
               className="flex items-center gap-space-sm px-space-md py-space-sm transition-colors bg-surface-container text-secondary font-label-lg rounded-lg"
             >
               <span className="material-symbols-outlined text-xl">dashboard</span>
               <span>My Grievances</span>
             </Link>
             <Link
-              to="/v2/submit-grievance"
+              to="/submit"
               className="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-label-lg text-label-lg"
             >
               <span className="material-symbols-outlined text-xl">add_circle</span>
               <span>Submit Grievance</span>
             </Link>
             <Link
-              to="/v2/public-tracking"
+              to="/track"
               className="flex items-center gap-space-sm px-space-md py-space-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors font-label-lg text-label-lg"
             >
               <span className="material-symbols-outlined text-xl">track_changes</span>
@@ -285,7 +285,7 @@ export default function CitizenDashboardPage() {
               </div>
               <div className="flex items-center gap-space-sm z-10">
                 <Link
-                  to="/v2/submit-grievance"
+                  to="/submit"
                   className="inline-flex items-center justify-center gap-space-xs px-space-lg py-space-sm rounded-xl bg-secondary text-on-secondary hover:bg-on-secondary-fixed-variant transition-all font-label-lg text-label-lg shadow-md hover:shadow-lg active:scale-95 group"
                 >
                   <span className="material-symbols-outlined text-lg transition-transform group-hover:rotate-90 duration-300">
@@ -408,7 +408,7 @@ export default function CitizenDashboardPage() {
                 </div>
                 <div className="flex items-center gap-space-sm mt-space-sm">
                   <Link
-                    to="/v2/submit-grievance"
+                    to="/submit"
                     className="inline-flex items-center gap-space-xs px-space-lg py-space-sm rounded-xl bg-secondary text-on-secondary font-label-lg text-label-lg shadow-md hover:bg-on-secondary-fixed-variant transition-all"
                   >
                     <span className="material-symbols-outlined text-lg">add_circle</span>
@@ -492,7 +492,7 @@ export default function CitizenDashboardPage() {
                       {filteredGrievances.map((item) => (
                         <tr
                           key={item.id || item.trackingId}
-                          onClick={() => navigate('/v2/citizen-grievance-detail', { state: { grievanceId: item.id, trackingId: item.trackingId, grievance: item } })}
+                          onClick={() => navigate('/grievance-detail', { state: { grievanceId: item.id, trackingId: item.trackingId, grievance: item } })}
                           className="hover:bg-surface-container-low transition-colors cursor-pointer group"
                         >
                           <td className="py-space-md px-space-md font-code-tracking text-code-tracking text-secondary font-semibold whitespace-nowrap">

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../services/api';
 
 /**
- * PublicTrackingStatusPage (v2)
+ * PublicTrackingStatusPage
  * Converted faithfully from Stitch export: public_tracking_status_lookup
  * 
  * Features:
@@ -154,22 +154,22 @@ export default function PublicTrackingStatusPage() {
             </div>
           </div>
           <nav className="hidden md:flex items-center gap-space-lg">
-            <Link to="/v2/citizen-dashboard" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
+            <Link to="/dashboard" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
               Home
             </Link>
-            <Link to="/v2/public-tracking" className="transition-colors py-space-xs text-secondary font-label-lg border-b-2 border-secondary">
+            <Link to="/track" className="transition-colors py-space-xs text-secondary font-label-lg border-b-2 border-secondary">
               Public Tracking
             </Link>
-            <Link to="/v2/citizen-login" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
+            <Link to="/citizen-login" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
               Citizen Login
             </Link>
-            <Link to="/v2/gro-login" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
+            <Link to="/gro-login" className="font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors py-space-xs">
               GRO Login
             </Link>
           </nav>
           <div className="flex items-center gap-space-md">
             <Link
-              to="/v2/submit-grievance"
+              to="/submit"
               className="inline-flex items-center justify-center px-space-md py-space-sm rounded-lg bg-secondary text-on-secondary font-label-lg text-label-lg hover:bg-secondary-container transition-colors shadow-sm"
             >
               Register Grievance
@@ -503,7 +503,7 @@ export default function PublicTrackingStatusPage() {
                                 </div>
                               </div>
                               <Link
-                                to="/v2/citizen-login"
+                                to="/citizen-login"
                                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-error text-on-error font-label-md text-label-md hover:opacity-90 transition-opacity shrink-0"
                               >
                                 <span>File Statutory Appeal</span>

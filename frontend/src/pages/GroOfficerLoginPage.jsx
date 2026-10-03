@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 
 /**
- * GroOfficerLoginPage (v2)
+ * GroOfficerLoginPage
  * Converted faithfully from Stitch export: gro_officer_login
  * 
  * Features:
@@ -34,7 +34,7 @@ export default function GroOfficerLoginPage() {
         setDemoState('citizen');
         return;
       }
-      navigate('/v2/gro-dashboard');
+      navigate('/gro-dashboard');
     } catch (err) {
       setDemoState('invalid');
       setErrorMessage(err.response?.data?.message || 'Authentication failed. Please verify your officer credentials.');
@@ -224,7 +224,7 @@ export default function GroOfficerLoginPage() {
                               </div>
                               <div className="pt-1">
                                 <Link
-                                  to="/v2/citizen-login"
+                                  to="/citizen-login"
                                   className="inline-flex items-center gap-2 bg-error text-on-error font-label-md px-4 py-2 rounded-lg shadow-sm hover:opacity-95 transition-all"
                                 >
                                   <span>Switch to Citizen Portal</span>
@@ -373,7 +373,7 @@ export default function GroOfficerLoginPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Link
-                      to="/v2/citizen-login"
+                      to="/citizen-login"
                       className="font-body-sm text-secondary font-semibold hover:underline flex items-center gap-1"
                     >
                       <span>Citizen Portal Login</span>
