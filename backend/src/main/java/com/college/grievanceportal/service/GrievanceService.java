@@ -349,6 +349,7 @@ public class GrievanceService {
     private GrievanceResponseDto mapToResponse(Grievance g) {
         Optional<Feedback> feedbackOpt = feedbackRepository.findByGrievanceId(g.getId());
         boolean isAppealed = feedbackOpt.map(f -> Boolean.TRUE.equals(f.getIsAppealed())).orElse(false);
+        String departmentName = g.getDepartment() != null ? g.getDepartment().getName() : "Unassigned";
 
         return GrievanceResponseDto.builder()
                 .id(g.getId())
@@ -357,6 +358,7 @@ public class GrievanceService {
                 .description(g.getDescription())
                 .status(g.getStatus())
                 .priority(g.getPriority())
+                .departmentName(departmentName)
                 .isAppealed(isAppealed)
                 .createdAt(g.getCreatedAt())
                 .resolutionLogs(resolutionLogRepository.findByGrievanceId(g.getId()).stream()

@@ -204,6 +204,7 @@ class GrievanceServiceTest {
         assertTrue(response.getTrackingId().startsWith("GRV-"), "Tracking ID must start with GRV- prefix");
         assertEquals(Status.PENDING, response.getStatus());
         assertEquals(Priority.MEDIUM, response.getPriority());
+        assertEquals("General Administration", response.getDepartmentName());
         assertEquals("Damaged streetlight", response.getSubject());
 
         ArgumentCaptor<Grievance> captor = ArgumentCaptor.forClass(Grievance.class);
@@ -228,10 +229,34 @@ class GrievanceServiceTest {
         assertNotNull(results);
         assertEquals(1, results.size());
         assertEquals("GRV-ABCD1234", results.get(0).getTrackingId());
+        assertEquals("Public Works Department", results.get(0).getDepartmentName());
 
         verify(grievanceRepository, times(1)).findByCitizenId(10L);
         verify(grievanceRepository, never()).findByCitizenId(eq(99L));
         verify(grievanceRepository, never()).findAll();
+    }
+
+    @Test
+    @DisplayName("getGrievancesForCitizen() safely defaults departmentName to 'Unassigned' when department is null")
+    void testGetGrievancesForCitizen_NullDepartment_DefaultsToUnassigned() {
+        Grievance unassignedGrievance = Grievance.builder()
+                .id(105L)
+                .trackingId("GRV-NULLDEPT")
+                .subject("Unassigned ticket")
+                .description("No department assigned")
+                .status(Status.PENDING)
+                .priority(Priority.LOW)
+                .citizen(citizen)
+                .department(null)
+                .build();
+
+        when(grievanceRepository.findByCitizenId(10L)).thenReturn(List.of(unassignedGrievance));
+
+        List<GrievanceResponseDto> results = grievanceService.getGrievancesForCitizen(10L);
+
+        assertNotNull(results);
+        assertEquals(1, results.size());
+        assertEquals("Unassigned", results.get(0).getDepartmentName());
     }
 
     @Test

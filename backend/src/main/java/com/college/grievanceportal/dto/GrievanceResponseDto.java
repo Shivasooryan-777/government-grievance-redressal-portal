@@ -20,11 +20,17 @@ public class GrievanceResponseDto {
     public GrievanceResponseDto(Long id, String trackingId, String subject, String description,
             Status status, Priority priority, LocalDateTime createdAt,
             List<ResolutionLogResponseDto> resolutionLogs, FeedbackResponseDto feedback) {
-        this(id, trackingId, subject, description, status, priority, false, createdAt, resolutionLogs, feedback);
+        this(id, trackingId, subject, description, status, priority, null, false, createdAt, resolutionLogs, feedback);
     }
 
     public GrievanceResponseDto(Long id, String trackingId, String subject, String description,
             Status status, Priority priority, Boolean isAppealed, LocalDateTime createdAt,
+            List<ResolutionLogResponseDto> resolutionLogs, FeedbackResponseDto feedback) {
+        this(id, trackingId, subject, description, status, priority, null, isAppealed, createdAt, resolutionLogs, feedback);
+    }
+
+    public GrievanceResponseDto(Long id, String trackingId, String subject, String description,
+            Status status, Priority priority, String departmentName, Boolean isAppealed, LocalDateTime createdAt,
             List<ResolutionLogResponseDto> resolutionLogs, FeedbackResponseDto feedback) {
         this.id = id;
         this.trackingId = trackingId;
@@ -32,6 +38,7 @@ public class GrievanceResponseDto {
         this.description = description;
         this.status = status;
         this.priority = priority;
+        this.departmentName = departmentName;
         this.isAppealed = isAppealed;
         this.createdAt = createdAt;
         this.resolutionLogs = resolutionLogs;
@@ -44,6 +51,7 @@ public class GrievanceResponseDto {
     private String description;
     private Status status;
     private Priority priority;
+    private String departmentName;
     private Boolean isAppealed;
     private LocalDateTime createdAt;
     private List<ResolutionLogResponseDto> resolutionLogs;
@@ -61,6 +69,8 @@ public class GrievanceResponseDto {
     public void setStatus(Status status) { this.status = status; }
     public Priority getPriority() { return priority; }
     public void setPriority(Priority priority) { this.priority = priority; }
+    public String getDepartmentName() { return departmentName; }
+    public void setDepartmentName(String departmentName) { this.departmentName = departmentName; }
     public Boolean getIsAppealed() { return isAppealed; }
     public void setIsAppealed(Boolean isAppealed) { this.isAppealed = isAppealed; }
     public LocalDateTime getCreatedAt() { return createdAt; }
@@ -79,6 +89,7 @@ public class GrievanceResponseDto {
         public Builder description(String description) { value.description = description; return this; }
         public Builder status(Status status) { value.status = status; return this; }
         public Builder priority(Priority priority) { value.priority = priority; return this; }
+        public Builder departmentName(String departmentName) { value.departmentName = departmentName; return this; }
         public Builder isAppealed(Boolean isAppealed) { value.isAppealed = isAppealed; return this; }
         public Builder createdAt(LocalDateTime createdAt) { value.createdAt = createdAt; return this; }
         public Builder resolutionLogs(List<ResolutionLogResponseDto> logs) { value.resolutionLogs = logs; return this; }
