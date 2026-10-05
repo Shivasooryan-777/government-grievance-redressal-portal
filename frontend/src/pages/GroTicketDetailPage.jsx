@@ -523,11 +523,11 @@ export default function GroTicketDetailPage() {
                     </span>
                   </div>
 
-                  <div className="relative pl-6 space-y-space-lg before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-surface-container-high">
+                  <div className="relative pl-8 space-y-space-lg before:absolute before:left-4 before:-translate-x-1/2 before:top-3 before:bottom-3 before:w-0.5 before:bg-surface-container-high">
                     {/* Event: Appeal Reopening (If active appeal) */}
                     {ticket?.isAppealed && (
                       <div className="relative flex flex-col gap-1">
-                        <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-error ring-4 ring-error-container" />
+                        <div className="absolute -left-6 top-1.5 w-4 h-4 rounded-full bg-error ring-4 ring-error-container" />
                         <div className="flex flex-wrap items-baseline justify-between gap-space-xs">
                           <div className="flex items-center gap-space-xs">
                             <span className="font-label-lg text-label-lg font-bold text-on-surface">
@@ -557,7 +557,7 @@ export default function GroTicketDetailPage() {
                       const milestoneNum = logs.length - index + 1;
                       return (
                         <div key={log.id || index} className="relative flex flex-col gap-1">
-                          <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-secondary ring-4 ring-secondary-fixed" />
+                          <div className="absolute -left-6 top-1.5 w-4 h-4 rounded-full bg-secondary ring-4 ring-secondary-fixed" />
                           <div className="flex flex-wrap items-baseline justify-between gap-space-xs">
                             <div className="flex items-center gap-space-xs">
                               <span className="font-label-lg text-label-lg font-bold text-on-surface">
@@ -585,7 +585,7 @@ export default function GroTicketDetailPage() {
 
                     {/* Event 1: Initial Grievance Registration */}
                     <div className="relative flex flex-col gap-1">
-                      <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-surface-container-highest ring-4 ring-surface-container" />
+                      <div className="absolute -left-6 top-1.5 w-4 h-4 rounded-full bg-surface-container-highest ring-4 ring-surface-container" />
                       <div className="flex flex-wrap items-baseline justify-between gap-space-xs">
                         <div className="flex items-center gap-space-xs">
                           <span className="font-label-lg text-label-lg font-bold text-on-surface">

@@ -453,7 +453,7 @@ export default function PublicTrackingStatusPage() {
                         {activeResult.status === 'REJECTED' || simState === 'rejected' ? (
                           <div className="flex flex-col gap-4">
                             <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md md:gap-0 w-full pt-4">
-                              <div className="hidden md:block absolute left-8 right-8 top-8 h-1 bg-surface-container-high -z-0">
+                              <div className="hidden md:block absolute left-[16.67%] right-[16.67%] top-8 -translate-y-1/2 h-1 bg-surface-container-high -z-0">
                                 <div className="h-full bg-error rounded-full" style={{ width: '100%' }} />
                               </div>
 
@@ -513,7 +513,7 @@ export default function PublicTrackingStatusPage() {
                           </div>
                         ) : (
                           <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md md:gap-0 w-full pt-4">
-                            <div className="hidden md:block absolute left-8 right-8 top-8 h-1 bg-surface-container-high -z-0">
+                            <div className="hidden md:block absolute left-[12.5%] right-[12.5%] top-8 -translate-y-1/2 h-1 bg-surface-container-high -z-0">
                               <div
                                 className="h-full bg-secondary rounded-full transition-all duration-500"
                                 style={{

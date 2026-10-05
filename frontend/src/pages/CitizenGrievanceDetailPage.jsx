@@ -665,8 +665,8 @@ export default function CitizenGrievanceDetailPage() {
                     </div>
 
                     {/* Timeline Rail */}
-                    <div className="relative pl-6 space-y-space-lg">
-                      <div className="absolute left-2.5 top-3 bottom-3 w-0.5 bg-surface-container-high" />
+                    <div className="relative pl-8 space-y-space-lg">
+                      <div className="absolute left-4 -translate-x-1/2 top-3 bottom-3 w-0.5 bg-surface-container-high" />
                       {logs.length === 0 ? (
                         <div className="p-space-md rounded-xl bg-surface-container-low text-on-surface-variant text-body-md">
                           No resolution updates recorded yet. The grievance has been registered and routed to the assigned department officer for initial review.
@@ -677,16 +677,16 @@ export default function CitizenGrievanceDetailPage() {
                           return (
                             <div key={log.id || idx} className="relative flex items-start gap-space-md">
                               <div
-                                className={`absolute -left-6 top-1 w-5 h-5 rounded-full flex items-center justify-center ${
+                                className={`absolute -left-6 top-1.5 w-4 h-4 rounded-full flex items-center justify-center ${
                                   isFinal
                                     ? 'bg-secondary text-on-secondary shadow-sm'
                                     : 'bg-surface-container-lowest ring-4 ring-secondary-fixed'
                                 }`}
                               >
                                 {isFinal ? (
-                                  <span className="material-symbols-outlined text-xs">check</span>
+                                  <span className="material-symbols-outlined text-[10px]">check</span>
                                 ) : (
-                                  <div className="w-2.5 h-2.5 rounded-full bg-secondary" />
+                                  <div className="w-2 h-2 rounded-full bg-secondary" />
                                 )}
                               </div>
                               <div

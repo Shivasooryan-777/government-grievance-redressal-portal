@@ -14,8 +14,12 @@ public class GrievanceRequestDto {
     @Size(min = 20, max = 5000, message = "Description must be between 20 and 5000 characters")
     private String description;
 
+    private String category;
+
     public String getSubject() { return subject; }
     public void setSubject(String subject) { this.subject = subject; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
 }
