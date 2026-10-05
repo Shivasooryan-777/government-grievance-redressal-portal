@@ -45,6 +45,7 @@ export default function SubmitNewGrievancePage() {
       const res = await api.post('/api/grievances', {
         subject: subject.trim(),
         description: description.trim(),
+        category,
       });
 
       if (res.data && res.data.success) {
@@ -476,8 +477,7 @@ export default function SubmitNewGrievancePage() {
                           <option value="roads">Roads, Bridges & Highway Maintenance Wing</option>
                           <option value="electricity">State Electricity Board & Street Lighting Authority</option>
                           <option value="sanitation">Solid Waste Management & Public Sanitation</option>
-                          <option value="transport">Public Urban Transport & Traffic Regulation</option>
-                          <option value="parks">Horticulture, Parks & Urban Forest Reserves</option>
+                          <option value="general">General Municipal Administration & Unassigned</option>
                         </select>
                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-space-md text-on-surface-variant">
                           <span className="material-symbols-outlined text-lg">expand_more</span>

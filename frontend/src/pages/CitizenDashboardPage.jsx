@@ -291,7 +291,7 @@ export default function CitizenDashboardPage() {
                   <span className="material-symbols-outlined text-lg transition-transform group-hover:rotate-90 duration-300">
                     add
                   </span>
-                  <span>+ Submit New Grievance</span>
+                  <span>Submit New Grievance</span>
                 </Link>
               </div>
             </section>
@@ -412,7 +412,7 @@ export default function CitizenDashboardPage() {
                     className="inline-flex items-center gap-space-xs px-space-lg py-space-sm rounded-xl bg-secondary text-on-secondary font-label-lg text-label-lg shadow-md hover:bg-on-secondary-fixed-variant transition-all"
                   >
                     <span className="material-symbols-outlined text-lg">add_circle</span>
-                    <span>+ Lodge Your First Grievance</span>
+                    <span>Lodge Your First Grievance</span>
                   </Link>
                   <button
                     type="button"

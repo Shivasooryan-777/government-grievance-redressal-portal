@@ -61,7 +61,7 @@ public class GrievanceService {
         grievance.setStatus(Status.PENDING);      // Placeholder until AI classification (Phase 3)
         grievance.setPriority(Priority.MEDIUM);  // Placeholder until AI classification (Phase 3)
         grievance.setCitizen(citizen);
-        grievance.setDepartment(getPlaceholderDepartment()); // Satisfies NOT NULL constraint
+        grievance.setDepartment(resolveDepartment(dto.getCategory()));
         grievance.setCreatedAt(LocalDateTime.now());
 
         return mapToResponse(grievanceRepository.save(grievance));
@@ -225,6 +225,42 @@ public class GrievanceService {
             throw new AccessDeniedException("GRO role required");
         }
         return user;
+    }
+
+    /**
+     * Resolves the target Department from the citizen's selected category.
+     * Maps frontend categories (water, electricity, roads, sanitation) to their respective seeded departments.
+     * Falls back to "General Administration" if category is null, blank, or unrecognized.
+     */
+    private Department resolveDepartment(String category) {
+        if (category == null || category.trim().isBlank()) {
+            return getPlaceholderDepartment();
+        }
+        String cat = category.trim().toLowerCase();
+        String deptName;
+        switch (cat) {
+            case "water":
+            case "water supply & sanitation":
+                deptName = "Water Supply & Sanitation";
+                break;
+            case "electricity":
+                deptName = "Electricity";
+                break;
+            case "roads":
+            case "roads & infrastructure":
+                deptName = "Roads & Infrastructure";
+                break;
+            case "sanitation":
+            case "health":
+            case "public health & sanitation":
+                deptName = "Public Health & Sanitation";
+                break;
+            default:
+                deptName = PLACEHOLDER_DEPARTMENT;
+                break;
+        }
+        return departmentRepository.findByName(deptName)
+                .orElseGet(this::getPlaceholderDepartment);
     }
 
     /**
