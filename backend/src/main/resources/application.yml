@@ -53,4 +53,8 @@ management:
   endpoint:
     health:
       show-details: never
+  # Mail health check attempts an outbound SMTP connection; disable so /actuator/health stays UP when SMTP is unavailable
+  health:
+    mail:
+      enabled: false
 
