@@ -1,0 +1,97 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Backend CI gate: compiles Java sources and executes Maven unit tests
+  backend-test:
+    name: Backend Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+
+      - name: Compile gate
+        working-directory: backend
+        run: mvn -B -ntp -DskipTests compile
+
+      - name: Unit tests
+        working-directory: backend
+        run: mvn -B -ntp test
+
+  # Frontend CI gate: checks lint rules and verifies production build
+  frontend-lint-build:
+    name: Frontend Lint & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+  # Backend CD deployment: triggers Render webhook deploy and executes health smoke test on main
+  deploy-backend:
+    name: Deploy Backend
+    needs: [backend-test, frontend-lint-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
+
+      - name: Post-deploy smoke test
+        run: |
+          # Render free tier needs time to build and wake up from spin-down
+          echo "Checking backend health at https://government-grievance-redressal-portal.onrender.com/actuator/health"
+          for attempt in $(seq 1 30); do
+            echo "Attempt $attempt of 30: checking /actuator/health..."
+            response=$(curl -s "https://government-grievance-redressal-portal.onrender.com/actuator/health" || true)
+            if echo "$response" | grep -q "UP"; then
+              echo "Smoke test passed: backend service is UP."
+              exit 0
+            fi
+            echo "Endpoint not UP yet. Waiting 20 seconds before retry..."
+            sleep 20
+          done
+          echo "Smoke test failed: backend did not report UP within 30 attempts (600s)."
+          exit 1
