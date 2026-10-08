@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/useAuth';
@@ -193,7 +193,7 @@ export default function CitizenGrievanceDetailPage() {
   const hasFeedback = Boolean(dossier?.feedback && dossier.feedback.id);
   const isResolved = dossier?.status === 'RESOLVED';
 
-  let currentActionState = 'in_progress';
+  let currentActionState;
   if (simOverride) {
     currentActionState = simOverride;
   } else if (isAppealed) {

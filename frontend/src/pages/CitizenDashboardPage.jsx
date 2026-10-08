@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/useAuth';
@@ -20,7 +20,7 @@ export default function CitizenDashboardPage() {
   const { user, logout } = useAuth();
   const [activeState, setActiveState] = useState('loading'); // 'default' | 'empty' | 'loading' | 'error'
   const [grievances, setGrievances] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
